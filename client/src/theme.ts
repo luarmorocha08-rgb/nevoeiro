@@ -40,8 +40,10 @@ export const THEME = {
   /** Cores usadas só na cena 3D. */
   scene: {
     background: '#0B0F1A',
-    /** cor da neblina exponencial (mistura da noite com a névoa) */
-    fogFar: '#1A2233',
+    /** cor da névoa e do horizonte (luz da lua espalhada no nevoeiro) */
+    fogFar: '#3B4760',
+    /** topo do céu */
+    skyZenith: '#070A12',
     ground: '#1B2620',
     windowLit: '#F2A65A',
     ember: '#FF8A3D',

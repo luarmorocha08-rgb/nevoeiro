@@ -92,8 +92,32 @@ export const CONFIG = {
     } as Record<string, number>,
     /** Multiplicador da neblina com os óculos térmicos. */
     thermalFogFactor: 0.3,
-    /** Opacidade máxima das camadas de neblina animadas. */
-    fogLayerOpacity: 0.13,
+    /** Forma da névoa (shader em client/src/game/fog.ts). */
+    fog: {
+      /** densidade extra rente ao chão (névoa de altura) */
+      heightDensity: 1.7,
+      /** quão rápido a névoa afina com a altura (maior = mais rente ao chão) */
+      heightFalloff: 0.2,
+      /** altura (m) onde a névoa é mais densa */
+      baseHeight: 0,
+      /** corte do horizonte (tudo some ao longe) */
+      distanceDensity: 0.42,
+      /** tamanho das manchas (menor = manchas maiores) */
+      noiseScale: 0.05,
+      /** quanto as manchas variam a densidade (0..1) */
+      noiseStrength: 0.6,
+      /** vento (m/s em unidades de ruído) */
+      windX: 0.32,
+      windZ: 0.11,
+      /** brilho da névoa na direção da lua */
+      moonGlow: 1.1,
+    },
+    /** Véus de névoa (cortinas verticais suaves ao redor do jogador). */
+    veils: {
+      opacity: 0.34,
+      /** raio (m) onde os véus são espalhados */
+      radius: 42,
+    },
     /** Pós-processamento. */
     bloomIntensity: 0.75,
     bloomThreshold: 0.72,

@@ -14,17 +14,28 @@ import { nearestTask } from './tasks';
 
 const BEAM_VERT = /* glsl */ `
 varying float vH;
+varying vec3 vN;
+varying vec3 vV;
 void main() {
   vH = uv.y;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vN = normalize(normalMatrix * normal);
+  vV = normalize(-mv.xyz);
+  gl_Position = projectionMatrix * mv;
 }`;
+// feixe suave: some nas bordas (fresnel) e para o alto
 const BEAM_FRAG = /* glsl */ `
 uniform vec3 uColor;
 uniform float uOpacity;
 varying float vH;
+varying vec3 vN;
+varying vec3 vV;
 void main() {
-  float a = pow(1.0 - vH, 2.2) * uOpacity;
+  float edge = pow(abs(dot(normalize(vN), normalize(vV))), 3.0);
+  float a = pow(1.0 - vH, 1.8) * edge * uOpacity;
   gl_FragColor = vec4(uColor, a);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }`;
 
 const ringGeo = new THREE.RingGeometry(0.85, 1.0, 40);
@@ -32,7 +43,7 @@ ringGeo.rotateX(-Math.PI / 2);
 const discGeo = new THREE.CircleGeometry(0.85, 32);
 discGeo.rotateX(-Math.PI / 2);
 const gemGeo = new THREE.OctahedronGeometry(0.22, 0);
-const beamGeo = new THREE.CylinderGeometry(0.28, 0.5, 26, 16, 1, true);
+const beamGeo = new THREE.CylinderGeometry(0.35, 0.6, 26, 20, 1, true);
 beamGeo.translate(0, 13, 0);
 
 export function TaskMarkers() {
@@ -100,7 +111,7 @@ function Marker({ st, fake }: { st: TaskStation; fake: boolean }) {
       gem.current.rotation.y = t * 1.4;
     }
     // feixe mais forte de longe (guia na neblina), some quando você chega
-    mats.beam.uniforms.uOpacity.value = Math.min(0.32, Math.max(0, (d - 4) / 30));
+    mats.beam.uniforms.uOpacity.value = Math.min(0.22, Math.max(0, (d - 4) / 40));
   });
 
   return (

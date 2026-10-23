@@ -1,12 +1,12 @@
 /**
  * Efeitos visuais: partículas (pool fixo, sem alocar por evento), efeitos de cada habilidade,
- * neblina por área + camadas animadas, ambiente vivo (vagalumes, poeira, folhas, fumaça),
+ * ambiente vivo (vagalumes, poeira, folhas, fumaça),
  * visão térmica e escolha de alvo. Tudo é descartado (dispose) ao desmontar.
  */
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { CONFIG, LAMP_POSITIONS, MAP_BLOCKS, fogZoneAt, locationAt, type FxMsg } from '@nevoeiro/shared';
+import { CONFIG, LAMP_POSITIONS, MAP_BLOCKS, locationAt, type FxMsg } from '@nevoeiro/shared';
 import { net, type FxItem } from '../net/netState';
 import { getState, useStore } from '../net/store';
 import type { QualityProfile } from '../quality';
@@ -27,32 +27,6 @@ function makeSoftTexture(inner = 0.55): THREE.CanvasTexture {
   g.fillRect(0, 0, 64, 64);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
-function makeNoiseTexture(size = 128): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const g = c.getContext('2d')!;
-  g.fillStyle = '#000';
-  g.fillRect(0, 0, size, size);
-  // manchas suaves que se repetem sem emenda (desenhadas também nas bordas opostas)
-  for (let i = 0; i < 70; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const r = 8 + Math.random() * 30;
-    for (const ox of [-size, 0, size]) {
-      for (const oy of [-size, 0, size]) {
-        const grd = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
-        grd.addColorStop(0, `rgba(255,255,255,${0.12 + Math.random() * 0.18})`);
-        grd.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = grd;
-        g.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
-      }
-    }
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }
 
@@ -81,6 +55,8 @@ void main() {
   vec4 t = texture2D(uMap, gl_PointCoord);
   gl_FragColor = vec4(vColor * t.rgb, t.a * vAlpha);
   if (gl_FragColor.a < 0.003) discard;
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }`;
 
 interface SpawnOpts {
@@ -499,105 +475,6 @@ export function FxLayer({ quality }: { quality: QualityProfile }) {
 }
 
 // ======================================================================== neblina
-
-/** Densidade da neblina muda suavemente conforme a área (e com os óculos térmicos). */
-export function FogController() {
-  const { scene } = useThree();
-  const thermal = useStore((s) => s.you?.thermal ?? false);
-  const current = useRef<number>(CONFIG.graphics.fogDensity);
-  useFrame((_, dt) => {
-    const fog = scene.fog as THREE.FogExp2 | null;
-    if (!fog) return;
-    const zone = fogZoneAt(net.local.x, net.local.z);
-    let target = CONFIG.graphics.fogDensity * (CONFIG.graphics.fogZones[zone] ?? 1);
-    if (thermal) target *= CONFIG.graphics.thermalFogFactor;
-    current.current += (target - current.current) * Math.min(1, dt * 0.8);
-    fog.density = current.current;
-  });
-  return null;
-}
-
-const FOG_LAYER_VERT = /* glsl */ `
-varying vec2 vUv;
-varying vec3 vWorld;
-void main() {
-  vUv = uv;
-  vec4 w = modelMatrix * vec4(position, 1.0);
-  vWorld = w.xyz;
-  gl_Position = projectionMatrix * viewMatrix * w;
-}`;
-const FOG_LAYER_FRAG = /* glsl */ `
-uniform sampler2D uNoise;
-uniform float uTime;
-uniform float uOpacity;
-uniform vec3 uColor;
-uniform vec3 uCenter;
-uniform vec2 uDrift;
-varying vec3 vWorld;
-void main() {
-  vec2 p = vWorld.xz * 0.025;
-  float n = texture2D(uNoise, p + uDrift * uTime).r;
-  n += texture2D(uNoise, p * 2.3 - uDrift.yx * uTime * 1.7).r * 0.6;
-  float d = distance(vWorld.xz, uCenter.xz);
-  float fade = smoothstep(60.0, 8.0, d) * smoothstep(0.0, 3.0, d);
-  float a = smoothstep(0.45, 1.2, n) * uOpacity * fade;
-  gl_FragColor = vec4(uColor, a);
-}`;
-
-/** Camadas horizontais de neblina animada que acompanham o jogador. */
-export function FogLayers({ count }: { count: number }) {
-  const noise = useMemo(() => makeNoiseTexture(), []);
-  const geo = useMemo(() => new THREE.PlaneGeometry(130, 130, 1, 1), []);
-  const mats = useMemo(
-    () =>
-      Array.from({ length: count }, (_, i) =>
-        new THREE.ShaderMaterial({
-          uniforms: {
-            uNoise: { value: noise },
-            uTime: { value: 0 },
-            uOpacity: { value: 0 },
-            uColor: { value: new THREE.Color(THEME.fog) },
-            uCenter: { value: new THREE.Vector3() },
-            uDrift: { value: new THREE.Vector2(0.006 + i * 0.003, 0.003 - i * 0.002) },
-          },
-          vertexShader: FOG_LAYER_VERT,
-          fragmentShader: FOG_LAYER_FRAG,
-          transparent: true,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        }),
-      ),
-    [count, noise],
-  );
-  const group = useRef<THREE.Group>(null);
-  const opacity = useRef(0);
-  useEffect(() => () => {
-    mats.forEach((m) => m.dispose());
-  }, [mats]);
-  useEffect(() => () => {
-    geo.dispose();
-    noise.dispose();
-  }, [geo, noise]);
-
-  useFrame(({ clock }, dt) => {
-    const zone = fogZoneAt(net.local.x, net.local.z);
-    const target = CONFIG.graphics.fogLayerOpacity * Math.min(1.6, CONFIG.graphics.fogZones[zone] ?? 1) * (getState().you?.thermal ? 0.2 : 1);
-    opacity.current += (target - opacity.current) * Math.min(1, dt);
-    if (group.current) group.current.position.set(net.local.x, 0, net.local.z);
-    mats.forEach((m, i) => {
-      m.uniforms.uTime.value = clock.elapsedTime;
-      m.uniforms.uOpacity.value = opacity.current * (1 - i * 0.22);
-      (m.uniforms.uCenter.value as THREE.Vector3).set(net.local.x, 0, net.local.z);
-    });
-  });
-  return (
-    <group ref={group}>
-      {mats.map((m, i) => (
-        <mesh key={i} geometry={geo} material={m} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.6 + i * 0.9, 0]} renderOrder={5 + i} />
-      ))}
-    </group>
-  );
-}
 
 // ======================================================================== ambiente vivo
 

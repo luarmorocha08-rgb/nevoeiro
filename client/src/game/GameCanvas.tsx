@@ -1,4 +1,3 @@
-import { Stars } from '@react-three/drei';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Physics } from '@react-three/rapier';
 import { Suspense, useRef } from 'react';
@@ -11,7 +10,10 @@ import { getState, useStore } from '../net/store';
 import { QUALITY_PROFILES, isTouchDevice, resolveQuality, saveAutoQuality, type QualityLevel, type QualityProfile } from '../quality';
 import { THEME } from '../theme';
 import { Bodies } from './Bodies';
-import { AmbientParticles, ChimneySmoke, FallingLeaves, FogController, FogLayers, FxLayer, TargetSystem, ThermalVision } from './Effects';
+import './fog';
+import { FogController, FogVeils, SkyDome } from './Atmosphere';
+import { MOON_DIR } from './fog';
+import { AmbientParticles, ChimneySmoke, FallingLeaves, FxLayer, TargetSystem, ThermalVision } from './Effects';
 import { LocalPlayer, OrbitCamera, RemotePlayers, SpectatorCamera } from './Players';
 import { PostFx } from './PostFx';
 import { TaskMarkers } from './TaskMarkers';
@@ -23,16 +25,17 @@ export function Moon({ quality, follow = true }: { quality: QualityProfile; foll
   useFrame(() => {
     const l = light.current;
     if (!l || !follow) return;
-    l.position.set(net.local.x - 18, 32, net.local.z - 12);
+    // a luz vem da lua que aparece no céu (MOON_DIR)
+    l.position.set(net.local.x + MOON_DIR.x * 40, MOON_DIR.y * 40 + 6, net.local.z + MOON_DIR.z * 40);
     l.target.position.set(net.local.x, 0, net.local.z);
     l.target.updateMatrixWorld();
   });
   return (
     <directionalLight
       ref={light}
-      position={[-18, 32, -12]}
+      position={[MOON_DIR.x * 40, MOON_DIR.y * 40 + 6, MOON_DIR.z * 40]}
       color={THEME.moonlight}
-      intensity={1.5}
+      intensity={2.1}
       castShadow={quality.shadows}
       shadow-mapSize-width={quality.shadowMapSize}
       shadow-mapSize-height={quality.shadowMapSize}
@@ -48,35 +51,17 @@ export function Moon({ quality, follow = true }: { quality: QualityProfile; foll
   );
 }
 
-/** Céu: lua com halo e estrelas fracas (acompanham a câmera, ficam atrás da neblina). */
-function Sky({ stars }: { stars: boolean }) {
-  const group = useRef<THREE.Group>(null);
-  useFrame(({ camera }) => group.current?.position.copy(camera.position));
-  return (
-    <group ref={group}>
-      {stars && <Stars radius={110} depth={30} count={1400} factor={3} saturation={0} fade speed={0.2} />}
-      <mesh position={[-60, 55, -70]}>
-        <circleGeometry args={[5, 40]} />
-        <meshBasicMaterial color={THEME.moonlight} toneMapped={false} fog={false} />
-      </mesh>
-      <mesh position={[-60.1, 54.9, -70.2]}>
-        <circleGeometry args={[14, 40]} />
-        <meshBasicMaterial color={THEME.moonlight} transparent opacity={0.08} toneMapped={false} fog={false} depthWrite={false} />
-      </mesh>
-    </group>
-  );
-}
-
 /** Iluminação noturna: céu frio, ambiente baixo e lua (luzes quentes ficam no World). */
 export function NightLighting({ quality, follow = true }: { quality: QualityProfile; follow?: boolean }) {
   return (
     <>
       <color attach="background" args={[THEME.scene.background]} />
-      <fogExp2 attach="fog" args={[THEME.scene.fogFar, CONFIG.graphics.fogDensity]} />
+      {/* THREE.Fog só transporta os uniforms da névoa (near = tempo, far = densidade) — ver fog.ts */}
+      <fog attach="fog" args={[THEME.scene.fogFar, 0, CONFIG.graphics.fogDensity]} />
       <ambientLight color={THEME.night2} intensity={1.6} />
-      <hemisphereLight args={[THEME.moonlight, '#10140F', 0.45]} />
+      <hemisphereLight args={[THEME.moonlight, '#151a14', 0.75]} />
       <Moon quality={quality} follow={follow} />
-      <Sky stars={quality.stars} />
+      <SkyDome stars={quality.stars} />
     </>
   );
 }
@@ -164,7 +149,7 @@ export function GameCanvas() {
       <SpectatorCamera />
       <OrbitCamera active={ended} radius={24} height={10} />
       <FogController />
-      {quality.fogLayers > 0 && <FogLayers count={quality.fogLayers} />}
+      <FogVeils count={quality.fogVeils} />
       <ThermalVision />
       <AmbientParticles dust={quality.dust} fireflies={quality.fireflies} />
       {quality.leaves > 0 && <FallingLeaves count={quality.leaves} />}

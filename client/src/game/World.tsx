@@ -2,6 +2,7 @@
  * Vila 3D placeholder (modular). Cada bloco de /shared/src/map.ts vira um placeholder;
  * se existir /client/assets/map/<id>.glb ou <kind>.glb, o modelo final é usado no lugar.
  * As colisões (Rapier no cliente, AABB no servidor) vêm SEMPRE dos dados do mapa.
+ * Texturas e geometrias procedurais ficam em ./scenery.ts.
  */
 import { Clone, Detailed, Instance, Instances, useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
@@ -10,12 +11,14 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import {
   CONFIG,
+  DOOR_WIDTH,
   HIDE_SPOTS,
   LAMP_POSITIONS,
   LOCATIONS,
   MAP_BLOCKS,
   MAP_COLLIDERS,
   ROADS,
+  WALL_THICKNESS,
   WORLD,
   buildingWalls,
   lampLit,
@@ -26,6 +29,23 @@ import { net } from '../net/netState';
 import type { QualityProfile } from '../quality';
 import { THEME } from '../theme';
 import { chimneyPos } from './Effects';
+import {
+  cobbleTex,
+  grassMaterial,
+  grassTuftGeometry,
+  groundDetailTex,
+  groundMaterial,
+  haloTex,
+  mergeGeometries,
+  pineCrownGeometry,
+  pineCrownMaterial,
+  plasterTex,
+  shingleTex,
+  stoneTex,
+  windTime,
+  woodTex,
+  worldMaterial,
+} from './scenery';
 
 const MAP_MODELS = import.meta.glob('/assets/map/*.{glb,gltf}', {
   eager: true,
@@ -42,75 +62,99 @@ function ModelAt({ url, block }: { url: string; block: MapBlock }) {
   return <Clone object={scene} position={[block.x, 0, block.z]} castShadow receiveShadow />;
 }
 
-// ------------------------------------------------------------------ texturas procedurais
+// ------------------------------------------------------------------ materiais compartilhados
 
-function makeNoiseTexture(base: string, spread: number, size = 256, repeat = 40) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const g = c.getContext('2d')!;
-  g.fillStyle = base;
-  g.fillRect(0, 0, size, size);
-  const img = g.getImageData(0, 0, size, size);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * spread;
-    img.data[i] += n;
-    img.data[i + 1] += n * 1.1;
-    img.data[i + 2] += n * 0.8;
-  }
-  g.putImageData(img, 0, 0);
-  for (let i = 0; i < 160; i++) {
-    g.fillStyle = `rgba(0,0,0,${Math.random() * 0.12})`;
-    g.beginPath();
-    g.arc(Math.random() * size, Math.random() * size, 4 + Math.random() * 18, 0, Math.PI * 2);
-    g.fill();
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(repeat, repeat);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
+let shared: ReturnType<typeof makeShared> | null = null;
+function makeShared() {
+  return {
+    ground: groundMaterial(),
+    cobble: worldMaterial({ map: cobbleTex(), color: '#7d786f', scale: 0.33 }),
+    cemetery: worldMaterial({ map: groundDetailTex(), color: '#2b3227', scale: 0.3, roughness: 1 }),
+    road: worldMaterial({ map: groundDetailTex(), color: '#5d4f3f', scale: 0.35, roughness: 1 }),
+    stone: worldMaterial({ map: stoneTex(), color: '#77736b', scale: 0.5 }),
+    darkStone: worldMaterial({ map: stoneTex(), color: '#55534e', scale: 0.6 }),
+    wood: worldMaterial({ map: woodTex(), color: '#3b2a1d', scale: 0.5 }),
+    floor: worldMaterial({ map: woodTex(), color: '#4a3726', scale: 0.4 }),
+    windowLit: new THREE.MeshStandardMaterial({ color: '#ffd7a0', emissive: THEME.warmLight, emissiveIntensity: 2.4, toneMapped: false }),
+    windowDark: new THREE.MeshStandardMaterial({ color: '#0f1418', roughness: 0.2, metalness: 0.4 }),
+    windowHalo: new THREE.MeshBasicMaterial({
+      map: haloTex(),
+      color: THEME.warmLight,
+      transparent: true,
+      opacity: 0.32,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    }),
+    trunk: worldMaterial({ map: woodTex(), color: '#2e2219', scale: 1.2, roughness: 1 }),
+    crown: makeCrownMaterial(),
+  };
+}
+function mats() {
+  return (shared ??= makeShared());
 }
 
-// ------------------------------------------------------------------ componentes
+/** Copas somem (pontilhado) quando a câmera encosta nelas — nada de tela verde. */
+function makeCrownMaterial() {
+  const m = pineCrownMaterial();
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vCamDist;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvCamDist = -mvPosition.z;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vCamDist;')
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        if (vCamDist < 3.2) {
+          float dith = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);
+          if (dith < (3.2 - vCamDist) / 1.6) discard;
+        }`,
+      );
+  };
+  m.customProgramCacheKey = () => 'crown-dither';
+  return m;
+}
+
+// ------------------------------------------------------------------ mundo
 
 export function World({ quality, physics = true }: { quality: QualityProfile; physics?: boolean }) {
-  const grass = useMemo(() => makeNoiseTexture(THEME.scene.ground, 24), []);
-  const dirt = useMemo(() => makeNoiseTexture('#3a3127', 30, 128, 1), []);
-  // texturas de canvas não são descartadas automaticamente
-  useEffect(() => () => {
-    grass.dispose();
-    dirt.dispose();
-  }, [grass, dirt]);
+  const M = mats();
   const blocks = MAP_BLOCKS;
-
   const byKind = useMemo(() => {
     const m: Record<string, MapBlock[]> = {};
     for (const b of blocks) (m[b.kind] ??= []).push(b);
     return m;
   }, [blocks]);
+  useFrame(({ clock }) => {
+    windTime.value = clock.elapsedTime;
+  });
 
   return (
     <group>
       {physics && <Colliders />}
-      {/* chão */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      {/* chão com variação de grama, musgo e terra */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow material={M.ground}>
         <planeGeometry args={[WORLD.half * 2 + 60, WORLD.half * 2 + 60]} />
-        <meshStandardMaterial map={grass} roughness={1} />
       </mesh>
-      {/* áreas dos locais (tom de chão diferente) */}
       {LOCATIONS.filter((l) => l.id === 'praca' || l.id === 'cemiterio').map((l) => (
-        <mesh key={l.id} rotation={[-Math.PI / 2, 0, 0]} position={[(l.minX + l.maxX) / 2, 0.01, (l.minZ + l.maxZ) / 2]} receiveShadow>
+        <mesh
+          key={l.id}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[(l.minX + l.maxX) / 2, 0.01, (l.minZ + l.maxZ) / 2]}
+          receiveShadow
+          material={l.id === 'praca' ? M.cobble : M.cemetery}
+        >
           <planeGeometry args={[l.maxX - l.minX, l.maxZ - l.minZ]} />
-          <meshStandardMaterial color={l.id === 'praca' ? '#3b3a36' : '#18201a'} roughness={1} />
         </mesh>
       ))}
       {ROADS.map((r, i) => {
         const len = Math.hypot(r.x2 - r.x1, r.z2 - r.z1);
         const ang = Math.atan2(r.x2 - r.x1, r.z2 - r.z1);
         return (
-          <mesh key={i} rotation={[-Math.PI / 2, 0, ang]} position={[(r.x1 + r.x2) / 2, 0.015, (r.z1 + r.z2) / 2]} receiveShadow>
+          <mesh key={i} rotation={[-Math.PI / 2, 0, ang]} position={[(r.x1 + r.x2) / 2, 0.015, (r.z1 + r.z2) / 2]} receiveShadow material={M.road}>
             <planeGeometry args={[r.w, len]} />
-            <meshStandardMaterial map={dirt} color="#8a7a66" roughness={1} />
           </mesh>
         );
       })}
@@ -120,27 +164,25 @@ export function World({ quality, physics = true }: { quality: QualityProfile; ph
         return url ? <ModelAt key={b.id} url={url} block={b} /> : <Building key={b.id} b={b} />;
       })}
       {byKind.wall?.map((b) => (
-        <mesh key={b.id} position={[b.x, b.h / 2, b.z]} castShadow receiveShadow>
-          <boxGeometry args={[b.w, b.h, b.d]} />
-          <meshStandardMaterial color={b.color ?? '#555'} roughness={0.95} />
-        </mesh>
+        <InnerWall key={b.id} b={b} />
       ))}
 
       <Trees blocks={byKind.tree ?? []} detail={quality.treeDetail} shadows={quality.shadows} />
+      {quality.grass > 0 && <Grass count={quality.grass} />}
       <Graves blocks={byKind.grave ?? []} />
       <SimpleBoxes blocks={byKind.rock ?? []} color="#3d4140" geometry="dodeca" />
-      <SimpleBoxes blocks={byKind.pew ?? []} color="#3a2618" />
-      <SimpleBoxes blocks={byKind.table ?? []} color="#4a3220" />
-      <SimpleBoxes blocks={byKind.counter ?? []} color="#3b2414" />
-      <SimpleBoxes blocks={byKind.desk ?? []} color="#2e2a26" />
+      <SimpleBoxes blocks={byKind.pew ?? []} color="#5a3c26" tex="wood" />
+      <SimpleBoxes blocks={byKind.table ?? []} color="#6a4a30" tex="wood" />
+      <SimpleBoxes blocks={byKind.counter ?? []} color="#5a3820" tex="wood" />
+      <SimpleBoxes blocks={byKind.desk ?? []} color="#4a4038" tex="wood" />
       <SimpleBoxes blocks={byKind.hay ?? []} color="#a68a3e" />
-      <SimpleBoxes blocks={byKind.cart ?? []} color="#4a3320" />
+      <SimpleBoxes blocks={byKind.cart ?? []} color="#6a4a2e" tex="wood" />
       <SimpleBoxes blocks={byKind.bed ?? []} color="#6b3a3a" />
       <SimpleBoxes blocks={byKind.sofa ?? []} color="#3b2e45" />
-      <SimpleBoxes blocks={byKind.altar ?? []} color="#cfc8b8" />
-      <SimpleBoxes blocks={byKind.bench ?? []} color="#3a2a1e" />
-      <SimpleBoxes blocks={byKind.crypt ?? []} color="#5a5a58" />
-      <SimpleBoxes blocks={byKind.wardrobe ?? []} color="#3a2a1c" />
+      <SimpleBoxes blocks={byKind.altar ?? []} color="#cfc8b8" tex="stone" />
+      <SimpleBoxes blocks={byKind.bench ?? []} color="#5a4030" tex="wood" />
+      <SimpleBoxes blocks={byKind.crypt ?? []} color="#7a7a76" tex="stone" />
+      <SimpleBoxes blocks={byKind.wardrobe ?? []} color="#5a4028" tex="wood" />
       <HideSpotVisuals />
       <Fences blocks={byKind.fence ?? []} />
       <Bars blocks={byKind.bars ?? []} />
@@ -168,90 +210,184 @@ function Colliders() {
   );
 }
 
+function InnerWall({ b }: { b: MapBlock }) {
+  const mat = useMemo(() => worldMaterial({ map: plasterTex(), color: b.color ?? '#555', scale: 0.25 }), [b.color]);
+  useEffect(() => () => mat.dispose(), [mat]);
+  return (
+    <mesh position={[b.x, b.h / 2, b.z]} castShadow receiveShadow material={mat}>
+      <boxGeometry args={[b.w, b.h, b.d]} />
+    </mesh>
+  );
+}
+
+// ------------------------------------------------------------------ construções
+
+interface WindowSpot {
+  x: number;
+  z: number;
+  y: number;
+  ry: number;
+  lit: boolean;
+}
+
+function boxAt(w: number, h: number, d: number, x: number, y: number, z: number) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  g.translate(x, y, z);
+  return g;
+}
+
+/** Peças extras de uma casa (coordenadas do mundo), mescladas por material. */
+function buildingDetail(b: MapBlock, windows: WindowSpot[]) {
+  const walls = buildingWalls(b);
+  const wood: THREE.BufferGeometry[] = [];
+  const stone: THREE.BufferGeometry[] = [];
+  const header: THREE.BufferGeometry[] = [];
+  const hw = b.w / 2;
+  const hd = b.d / 2;
+  const church = !!b.tower;
+  // alicerce de pedra seguindo as paredes (respeita o vão da porta)
+  for (const w of walls) stone.push(boxAt(w.w + 0.16, 0.62, w.d + 0.16, w.x, 0.31, w.z));
+  if (!church) {
+    // enxaimel: postes nos cantos e vigas em volta
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) wood.push(boxAt(0.28, b.h, 0.28, b.x + sx * hw, b.h / 2, b.z + sz * hd));
+    for (const y of [Math.max(3.0, b.h * 0.55), b.h - 0.12]) {
+      wood.push(boxAt(b.w + 0.12, 0.2, 0.12, b.x, y, b.z - hd - 0.03));
+      wood.push(boxAt(b.w + 0.12, 0.2, 0.12, b.x, y, b.z + hd + 0.03));
+      wood.push(boxAt(0.12, 0.2, b.d + 0.12, b.x - hw - 0.03, y, b.z));
+      wood.push(boxAt(0.12, 0.2, b.d + 0.12, b.x + hw + 0.03, y, b.z));
+    }
+  } else {
+    // igreja de pedra: contrafortes nas laterais
+    for (let k = -2; k <= 2; k++) for (const sx of [-1, 1]) stone.push(boxAt(0.7, b.h * 0.75, 1, b.x + sx * (hw + 0.3), b.h * 0.375, b.z + k * (b.d / 5)));
+  }
+  // porta: parede acima do vão, batentes e verga
+  if (b.door) {
+    const t = WALL_THICKNESS;
+    const horizontal = b.door === 'n' || b.door === 's';
+    const cx = b.door === 'e' ? b.x + hw - t / 2 : b.door === 'w' ? b.x - hw + t / 2 : b.x;
+    const cz = b.door === 's' ? b.z + hd - t / 2 : b.door === 'n' ? b.z - hd + t / 2 : b.z;
+    const top = 2.75;
+    if (b.h > top) header.push(boxAt(horizontal ? DOOR_WIDTH : t, b.h - top, horizontal ? t : DOOR_WIDTH, cx, top + (b.h - top) / 2, cz));
+    for (const s of [-1, 1]) {
+      const ox = horizontal ? s * (DOOR_WIDTH / 2 - 0.06) : 0;
+      const oz = horizontal ? 0 : s * (DOOR_WIDTH / 2 - 0.06);
+      wood.push(boxAt(horizontal ? 0.16 : t + 0.14, top, horizontal ? t + 0.14 : 0.16, cx + ox, top / 2, cz + oz));
+    }
+    wood.push(boxAt(horizontal ? DOOR_WIDTH + 0.3 : t + 0.16, 0.22, horizontal ? t + 0.16 : DOOR_WIDTH + 0.3, cx, top, cz));
+  }
+  // molduras das janelas (com cruz e peitoril)
+  for (const w of windows) {
+    const parts = [
+      boxAt(1.2, 0.1, 0.1, 0, 0.6, 0),
+      boxAt(1.36, 0.1, 0.22, 0, -0.6, 0.05),
+      boxAt(0.1, 1.2, 0.1, -0.55, 0, 0),
+      boxAt(0.1, 1.2, 0.1, 0.55, 0, 0),
+      boxAt(0.06, 1.1, 0.06, 0, 0, 0.02),
+      boxAt(1.0, 0.06, 0.06, 0, 0.05, 0.02),
+    ];
+    for (const p of parts) {
+      p.rotateY(w.ry);
+      p.translate(w.x, w.y, w.z);
+      wood.push(p);
+    }
+  }
+  const merge = (list: THREE.BufferGeometry[]) => {
+    if (!list.length) return null;
+    const m = mergeGeometries(list.map((g) => g.toNonIndexed()));
+    list.forEach((g) => g.dispose());
+    return m;
+  };
+  return { wood: merge(wood), stone: merge(stone), header: merge(header) };
+}
+
 function Building({ b }: { b: MapBlock }) {
+  const M = mats();
   const walls = useMemo(() => buildingWalls(b), [b]);
   const roof = useRef<THREE.Group>(null);
-  const wallMat = useMemo(() => new THREE.MeshStandardMaterial({ color: b.color ?? '#5a5550', roughness: 0.95 }), [b.color]);
-  const roofMat = useMemo(() => new THREE.MeshStandardMaterial({ color: b.roofColor ?? '#2a2522', roughness: 0.9 }), [b.roofColor]);
+  const church = !!b.tower;
+  const wallMat = useMemo(
+    () => (church ? worldMaterial({ map: stoneTex(), color: b.color ?? '#5a5550', scale: 0.5 }) : worldMaterial({ map: plasterTex(), color: b.color ?? '#5a5550', scale: 0.25 })),
+    [b.color, church],
+  );
+  const roofMat = useMemo(() => worldMaterial({ map: shingleTex(), color: b.roofColor ?? '#2a2522', scale: 0.5, roof: true, roughness: 0.85 }), [b.roofColor]);
   useEffect(() => () => {
     wallMat.dispose();
     roofMat.dispose();
   }, [wallMat, roofMat]);
   const windows = useMemo(() => {
     // janelas: algumas acesas (luz quente), outras escuras
-    const out: { x: number; z: number; ry: number; lit: boolean }[] = [];
+    const out: WindowSpot[] = [];
     const seed = b.x * 13.7 + b.z * 7.1;
+    const y = Math.min(2.2, b.h * 0.45) + 0.1;
     const sides: [number, number, number, number][] = [
-      [b.x, b.z - b.d / 2 - 0.01, Math.PI, b.w],
-      [b.x, b.z + b.d / 2 + 0.01, 0, b.w],
-      [b.x + b.w / 2 + 0.01, b.z, Math.PI / 2, b.d],
-      [b.x - b.w / 2 - 0.01, b.z, -Math.PI / 2, b.d],
+      [b.x, b.z - b.d / 2 - 0.02, Math.PI, b.w],
+      [b.x, b.z + b.d / 2 + 0.02, 0, b.w],
+      [b.x + b.w / 2 + 0.02, b.z, Math.PI / 2, b.d],
+      [b.x - b.w / 2 - 0.02, b.z, -Math.PI / 2, b.d],
     ];
+    const doorSide = { n: 0, s: 1, e: 2, w: 3 }[b.door ?? 'n'];
     sides.forEach(([cx, cz, ry, len], si) => {
       const count = Math.max(1, Math.floor(len / 5));
       for (let i = 0; i < count; i++) {
         const off = (i - (count - 1) / 2) * (len / count);
-        if (Math.abs(off) < 2) continue; // não cobre a porta
+        if (si === doorSide && Math.abs(off) < 2.2) continue; // não cobre a porta
         const horizontal = si < 2;
-        out.push({
-          x: horizontal ? cx + off : cx,
-          z: horizontal ? cz : cz + off,
-          ry,
-          lit: Math.sin(seed + i * 3.1 + si) > 0.1,
-        });
+        out.push({ x: horizontal ? cx + off : cx, z: horizontal ? cz : cz + off, y, ry, lit: Math.sin(seed + i * 3.1 + si) > 0.1 });
       }
     });
     return out;
   }, [b]);
+  const detail = useMemo(() => buildingDetail(b, windows), [b, windows]);
+  useEffect(() => () => {
+    detail.wood?.dispose();
+    detail.stone?.dispose();
+    detail.header?.dispose();
+  }, [detail]);
 
   useFrame(() => {
     if (!roof.current) return;
-    const inside =
-      Math.abs(net.local.x - b.x) < b.w / 2 + 0.3 && Math.abs(net.local.z - b.z) < b.d / 2 + 0.3;
+    const inside = Math.abs(net.local.x - b.x) < b.w / 2 + 0.3 && Math.abs(net.local.z - b.z) < b.d / 2 + 0.3;
     roof.current.visible = !inside;
   });
 
   const roofH = Math.min(b.w, b.d) * 0.45;
   const horizontalRidge = b.w >= b.d;
   const chimney = b.chimney ? chimneyPos(b) : null;
+  const roofScale: [number, number, number] = [horizontalRidge ? b.w + 0.7 : b.d + 0.7, roofH, (horizontalRidge ? b.d : b.w) + 1.0];
   return (
     <Detailed distances={[0, CONFIG.graphics.lodDistance]} position={[b.x, 0, b.z]}>
       <group position={[-b.x, 0, -b.z]}>
-        <group>
-          {walls.map((w, i) => (
-            <mesh key={i} position={[w.x, w.h / 2, w.z]} material={wallMat} castShadow receiveShadow>
-              <boxGeometry args={[w.w, w.h, w.d]} />
-            </mesh>
-          ))}
-          {/* piso interno */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[b.x, 0.02, b.z]} receiveShadow>
-            <planeGeometry args={[b.w - 0.4, b.d - 0.4]} />
-            <meshStandardMaterial color="#2b231c" roughness={1} />
+        {walls.map((w, i) => (
+          <mesh key={i} position={[w.x, w.h / 2, w.z]} material={wallMat} castShadow receiveShadow>
+            <boxGeometry args={[w.w, w.h, w.d]} />
           </mesh>
-          {/* telhado de duas águas */}
-          <group ref={roof} position={[b.x, b.h, b.z]} rotation={[0, horizontalRidge ? 0 : Math.PI / 2, 0]}>
-            <mesh material={roofMat} castShadow scale={[horizontalRidge ? b.w + 0.6 : b.d + 0.6, roofH, (horizontalRidge ? b.d : b.w) + 0.8]}>
-              <RoofGeometry />
-            </mesh>
-          </group>
-          {windows.map((w, i) => (
-            <mesh key={i} position={[w.x, Math.min(2.2, b.h * 0.45), w.z]} rotation={[0, w.ry, 0]}>
-              <planeGeometry args={[1, 1.1]} />
-              <meshStandardMaterial
-                color={w.lit ? THEME.warmLight : '#141a1e'}
-                emissive={w.lit ? THEME.warmLight : '#000000'}
-                emissiveIntensity={w.lit ? 2.2 : 0}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-          ))}
-          {b.tower && <ChurchTower b={b} />}
-          {chimney && (
-            <mesh position={[chimney.x, chimney.y - 1, chimney.z]} material={wallMat} castShadow>
-              <boxGeometry args={[0.8, 2, 0.8]} />
-            </mesh>
-          )}
+        ))}
+        {detail.header && <mesh geometry={detail.header} material={wallMat} castShadow receiveShadow />}
+        {detail.wood && <mesh geometry={detail.wood} material={M.wood} castShadow receiveShadow />}
+        {detail.stone && <mesh geometry={detail.stone} material={M.stone} castShadow receiveShadow />}
+        {/* piso interno de tábuas */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[b.x, 0.02, b.z]} receiveShadow material={M.floor}>
+          <planeGeometry args={[b.w - 0.4, b.d - 0.4]} />
+        </mesh>
+        {/* telhado de duas águas com cumeeira */}
+        <group ref={roof} position={[b.x, b.h, b.z]} rotation={[0, horizontalRidge ? 0 : Math.PI / 2, 0]}>
+          <mesh material={roofMat} castShadow scale={roofScale} geometry={ROOF_GEO} />
+          <mesh material={M.wood} position={[0, roofH + 0.02, 0]} castShadow>
+            <boxGeometry args={[roofScale[0] + 0.1, 0.16, 0.22]} />
+          </mesh>
         </group>
+        {windows.map((w, i) => (
+          <group key={i} position={[w.x, w.y, w.z]} rotation={[0, w.ry, 0]}>
+            <mesh material={w.lit ? M.windowLit : M.windowDark} geometry={WINDOW_GEO} />
+            {w.lit && <mesh material={M.windowHalo} geometry={HALO_GEO} position={[0, 0, 0.12]} renderOrder={7} />}
+          </group>
+        ))}
+        {b.tower && <ChurchTower b={b} wallMat={wallMat} roofMat={roofMat} />}
+        {chimney && (
+          <mesh position={[chimney.x, chimney.y - 1, chimney.z]} material={M.stone} castShadow>
+            <boxGeometry args={[0.8, 2, 0.8]} />
+          </mesh>
+        )}
       </group>
       {/* versão simplificada para longe (LOD) */}
       <group position={[-b.x, 0, -b.z]}>
@@ -259,46 +395,54 @@ function Building({ b }: { b: MapBlock }) {
           <boxGeometry args={[b.w, b.h, b.d]} />
         </mesh>
         <group position={[b.x, b.h, b.z]} rotation={[0, horizontalRidge ? 0 : Math.PI / 2, 0]}>
-          <mesh material={roofMat} scale={[horizontalRidge ? b.w + 0.6 : b.d + 0.6, roofH, (horizontalRidge ? b.d : b.w) + 0.8]}>
-            <RoofGeometry />
-          </mesh>
+          <mesh material={roofMat} scale={roofScale} geometry={ROOF_GEO} />
         </group>
-        {b.tower && <ChurchTower b={b} />}
+        {windows.filter((w) => w.lit).map((w, i) => (
+          <group key={i} position={[w.x, w.y, w.z]} rotation={[0, w.ry, 0]}>
+            <mesh material={M.windowLit} geometry={WINDOW_GEO} />
+          </group>
+        ))}
+        {b.tower && <ChurchTower b={b} wallMat={wallMat} roofMat={roofMat} />}
       </group>
     </Detailed>
   );
 }
 
-/** Prisma triangular unitário (telhado). */
-function RoofGeometry() {
-  const geo = useMemo(() => {
-    const shape = new THREE.Shape();
-    shape.moveTo(-0.5, 0);
-    shape.lineTo(0.5, 0);
-    shape.lineTo(0, 1);
-    shape.lineTo(-0.5, 0);
-    const g = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false });
-    g.translate(0, 0, -0.5);
-    g.rotateY(Math.PI / 2);
-    return g;
-  }, []);
-  return <primitive object={geo} attach="geometry" />;
-}
+const WINDOW_GEO = new THREE.PlaneGeometry(1.05, 1.15);
+const HALO_GEO = new THREE.PlaneGeometry(3.2, 3.2);
 
-function ChurchTower({ b }: { b: MapBlock }) {
+/** Prisma triangular unitário (telhado). */
+const ROOF_GEO = (() => {
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.5, 0);
+  shape.lineTo(0.5, 0);
+  shape.lineTo(0, 1);
+  shape.lineTo(-0.5, 0);
+  const g = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false });
+  g.translate(0, 0, -0.5);
+  g.rotateY(Math.PI / 2);
+  return g;
+})();
+
+function ChurchTower({ b, wallMat, roofMat }: { b: MapBlock; wallMat: THREE.Material; roofMat: THREE.Material }) {
   const z = b.z - b.d / 2 + 2.5;
   return (
     <group position={[b.x, 0, z]}>
-      <mesh position={[0, b.h + 4, 0]} castShadow>
+      <mesh position={[0, b.h + 4, 0]} castShadow material={wallMat}>
         <boxGeometry args={[4, 8, 4]} />
-        <meshStandardMaterial color={b.color} roughness={0.95} />
       </mesh>
-      <mesh position={[0, b.h + 10.5, 0]} castShadow>
+      {/* arcos do campanário (aberturas escuras) */}
+      {[0, Math.PI / 2, Math.PI, -Math.PI / 2].map((r) => (
+        <mesh key={r} position={[Math.sin(r) * 2.01, b.h + 6.3, Math.cos(r) * 2.01]} rotation={[0, r, 0]}>
+          <planeGeometry args={[1.3, 2.2]} />
+          <meshStandardMaterial color="#07080b" />
+        </mesh>
+      ))}
+      <mesh position={[0, b.h + 10.5, 0]} castShadow material={roofMat}>
         <coneGeometry args={[3.1, 5, 4]} />
-        <meshStandardMaterial color={b.roofColor} roughness={0.9} />
       </mesh>
-      <mesh position={[0, b.h + 6, 2.01]}>
-        <circleGeometry args={[0.9, 20]} />
+      <mesh position={[0, b.h + 3.6, 2.02]}>
+        <circleGeometry args={[0.9, 24]} />
         <meshStandardMaterial color="#d8d0b0" emissive="#806a40" emissiveIntensity={0.6} />
       </mesh>
       <group position={[0, b.h + 14, 0]}>
@@ -315,9 +459,11 @@ function ChurchTower({ b }: { b: MapBlock }) {
   );
 }
 
+// ------------------------------------------------------------------ árvores
+
 /**
- * Árvores com instancing, divididas em blocos de 56 m: cada bloco tem a própria
- * caixa de colisão de câmera (frustum culling) e some além de CONFIG.graphics.cullDistance.
+ * Pinheiros com instancing, divididos em blocos de 56 m: cada bloco tem a própria
+ * esfera de culling e some além de CONFIG.graphics.cullDistance.
  */
 function Trees({ blocks, detail, shadows }: { blocks: MapBlock[]; detail: number; shadows: boolean }) {
   const chunks = useMemo(() => {
@@ -330,49 +476,29 @@ function Trees({ blocks, detail, shadows }: { blocks: MapBlock[]; detail: number
   }, [blocks]);
   const geos = useMemo(
     () => ({
-      trunk: new THREE.CylinderGeometry(0.18, 0.32, 1, 6),
-      crown: new THREE.ConeGeometry(1, 1, detail),
+      trunk: new THREE.CylinderGeometry(0.1, 0.24, 1, 7).translate(0, 0.5, 0),
+      crown: pineCrownGeometry(detail),
     }),
     [detail],
-  );
-  const mats = useMemo(
-    () => ({
-      trunk: new THREE.MeshStandardMaterial({ color: '#2a1f17', roughness: 1 }),
-      crown: new THREE.MeshStandardMaterial({ color: '#15261c', roughness: 1 }),
-    }),
-    [],
   );
   useEffect(() => () => {
     geos.trunk.dispose();
     geos.crown.dispose();
   }, [geos]);
-  useEffect(() => () => {
-    mats.trunk.dispose();
-    mats.crown.dispose();
-  }, [mats]);
   if (!blocks.length) return null;
   const url = mapModel('tree');
   if (url) return <>{blocks.map((b) => <ModelAt key={b.id} url={url} block={b} />)}</>;
   return (
     <group>
       {chunks.map((c, i) => (
-        <TreeChunk key={i} trees={c} geos={geos} mats={mats} shadows={shadows} />
+        <TreeChunk key={i} trees={c} geos={geos} shadows={shadows} />
       ))}
     </group>
   );
 }
 
-function TreeChunk({
-  trees,
-  geos,
-  mats,
-  shadows,
-}: {
-  trees: MapBlock[];
-  geos: { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry };
-  mats: { trunk: THREE.Material; crown: THREE.Material };
-  shadows: boolean;
-}) {
+function TreeChunk({ trees, geos, shadows }: { trees: MapBlock[]; geos: { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry }; shadows: boolean }) {
+  const M = mats();
   const trunk = useRef<THREE.InstancedMesh>(null);
   const crown = useRef<THREE.InstancedMesh>(null);
   const group = useRef<THREE.Group>(null);
@@ -385,22 +511,17 @@ function TreeChunk({
     const d = new THREE.Object3D();
     const shade = new THREE.Color();
     trees.forEach((b, i) => {
-      d.position.set(b.x, b.h * 0.2, b.z);
-      d.scale.set(1, b.h * 0.4, 1);
-      d.rotation.set(0, 0, 0);
+      const k = Math.abs(Math.sin(b.x * 12.9898 + b.z * 78.233)); // variação estável por árvore
+      d.position.set(b.x, 0, b.z);
+      d.rotation.set(0, k * 6.28, 0);
+      d.scale.set(1 + k * 0.4, b.h * 0.62, 1 + k * 0.4);
       d.updateMatrix();
       trunk.current!.setMatrixAt(i, d.matrix);
-      d.position.set(b.x, b.h * 0.5, b.z);
-      d.scale.set(b.h * 0.26, b.h * 0.55, b.h * 0.26);
-      d.rotation.set(0, (b.x * 7 + b.z * 3) % 6.28, 0);
+      const wide = b.h * (0.92 + k * 0.3);
+      d.scale.set(wide, b.h, wide);
       d.updateMatrix();
-      crown.current!.setMatrixAt(i * 2, d.matrix);
-      crown.current!.setColorAt(i * 2, shade.set('#15261c'));
-      d.position.set(b.x, b.h * 0.78, b.z);
-      d.scale.set(b.h * 0.18, b.h * 0.4, b.h * 0.18);
-      d.updateMatrix();
-      crown.current!.setMatrixAt(i * 2 + 1, d.matrix);
-      crown.current!.setColorAt(i * 2 + 1, shade.set('#1a2f22'));
+      crown.current!.setMatrixAt(i, d.matrix);
+      crown.current!.setColorAt(i, shade.setHSL(0.36 + k * 0.05, 0.25 + k * 0.15, 0.62 + k * 0.3));
     });
     for (const m of [trunk.current!, crown.current!]) {
       m.instanceMatrix.needsUpdate = true;
@@ -413,26 +534,110 @@ function TreeChunk({
   });
   return (
     <group ref={group}>
-      <instancedMesh ref={trunk} args={[geos.trunk, mats.trunk, trees.length]} castShadow={shadows} receiveShadow />
-      <instancedMesh ref={crown} args={[geos.crown, mats.crown, trees.length * 2]} castShadow={shadows} />
+      <instancedMesh ref={trunk} args={[geos.trunk, M.trunk, trees.length]} castShadow={shadows} receiveShadow />
+      <instancedMesh ref={crown} args={[geos.crown, M.crown, trees.length]} castShadow={shadows} receiveShadow />
     </group>
   );
 }
 
+// ------------------------------------------------------------------ grama
+
+const GRASS_CHUNK = 24;
+
+/** Tufos de grama com vento, em blocos que somem de longe. Evitam casas, estradas e a praça. */
+function Grass({ count }: { count: number }) {
+  const chunks = useMemo(() => {
+    let s = 4242;
+    const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    const blocked = (x: number, z: number) => {
+      if (Math.abs(x) < 16 && Math.abs(z) < 16) return true; // praça calçada
+      for (const c of MAP_COLLIDERS) if (x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4) return true;
+      for (const b of MAP_BLOCKS) if (b.kind === 'building' && Math.abs(x - b.x) < b.w / 2 + 0.6 && Math.abs(z - b.z) < b.d / 2 + 0.6) return true;
+      for (const rd of ROADS) {
+        const dx = rd.x2 - rd.x1;
+        const dz = rd.z2 - rd.z1;
+        const len2 = dx * dx + dz * dz;
+        const t = Math.max(0, Math.min(1, ((x - rd.x1) * dx + (z - rd.z1) * dz) / len2));
+        if (Math.hypot(x - (rd.x1 + dx * t), z - (rd.z1 + dz * t)) < rd.w / 2 + 0.3) return true;
+      }
+      return false;
+    };
+    const map = new Map<string, { x: number; z: number; s: number; h: number; k: number }[]>();
+    const lim = WORLD.walkHalf;
+    let placed = 0;
+    let guard = 0;
+    while (placed < count && guard++ < count * 6) {
+      // aglomerados: tufos nascem em grupos
+      const cx = (r() * 2 - 1) * lim;
+      const cz = (r() * 2 - 1) * lim;
+      const n = 3 + Math.floor(r() * 6);
+      for (let i = 0; i < n && placed < count; i++) {
+        const x = cx + (r() - 0.5) * 3;
+        const z = cz + (r() - 0.5) * 3;
+        if (blocked(x, z)) continue;
+        const key = `${Math.floor(x / GRASS_CHUNK)}:${Math.floor(z / GRASS_CHUNK)}`;
+        (map.get(key) ?? map.set(key, []).get(key)!).push({ x, z, s: 0.45 + r() * 0.5, h: 0.22 + r() * 0.32, k: r() });
+        placed++;
+      }
+    }
+    return [...map.values()];
+  }, [count]);
+  const geo = useMemo(grassTuftGeometry, []);
+  const mat = useMemo(grassMaterial, []);
+  useEffect(() => () => {
+    geo.dispose();
+    mat.dispose();
+  }, [geo, mat]);
+  return (
+    <group>
+      {chunks.map((c, i) => (
+        <GrassChunk key={i} tufts={c} geo={geo} mat={mat} />
+      ))}
+    </group>
+  );
+}
+
+function GrassChunk({ tufts, geo, mat }: { tufts: { x: number; z: number; s: number; h: number; k: number }[]; geo: THREE.BufferGeometry; mat: THREE.Material }) {
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  const center = useMemo(() => new THREE.Vector3(tufts.reduce((a, t) => a + t.x, 0) / tufts.length, 0, tufts.reduce((a, t) => a + t.z, 0) / tufts.length), [tufts]);
+  useLayoutEffect(() => {
+    const d = new THREE.Object3D();
+    const c = new THREE.Color();
+    tufts.forEach((t, i) => {
+      d.position.set(t.x, 0, t.z);
+      d.rotation.set(0, t.k * 6.28, 0);
+      d.scale.set(t.s, t.h, t.s);
+      d.updateMatrix();
+      mesh.current!.setMatrixAt(i, d.matrix);
+      // verde escuro a palha seca
+      mesh.current!.setColorAt(i, c.setRGB(0.2 + t.k * 0.16, 0.27 + t.k * 0.08, 0.16));
+    });
+    mesh.current!.instanceMatrix.needsUpdate = true;
+    if (mesh.current!.instanceColor) mesh.current!.instanceColor.needsUpdate = true;
+    mesh.current!.computeBoundingSphere();
+  }, [tufts]);
+  useFrame(({ camera }) => {
+    if (mesh.current) mesh.current.visible = camera.position.distanceTo(center) < 52;
+  });
+  return <instancedMesh ref={mesh} args={[geo, mat, tufts.length]} receiveShadow />;
+}
+
+// ------------------------------------------------------------------ objetos
+
 function Graves({ blocks }: { blocks: MapBlock[] }) {
+  const M = mats();
   if (!blocks.length) return null;
   return (
     <group>
-      <Instances limit={blocks.length} castShadow receiveShadow>
+      <Instances limit={blocks.length} castShadow receiveShadow material={M.darkStone}>
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#6b6d6a" roughness={0.95} />
         {blocks.map((b) => (
           <Instance key={b.id} position={[b.x, b.h / 2, b.z]} scale={[b.w, b.h, b.d]} />
         ))}
       </Instances>
       <Instances limit={blocks.length}>
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#232a24" roughness={1} />
+        <meshStandardMaterial color="#1f261f" roughness={1} />
         {blocks.map((b) => (
           <Instance key={b.id} position={[b.x, 0.04, b.z + 0.9]} scale={[0.8, 0.08, 1.6]} />
         ))}
@@ -441,14 +646,19 @@ function Graves({ blocks }: { blocks: MapBlock[] }) {
   );
 }
 
-function SimpleBoxes({ blocks, color, geometry = 'box' }: { blocks: MapBlock[]; color: string; geometry?: 'box' | 'dodeca' }) {
+function SimpleBoxes({ blocks, color, geometry = 'box', tex }: { blocks: MapBlock[]; color: string; geometry?: 'box' | 'dodeca'; tex?: 'wood' | 'stone' }) {
+  const mat = useMemo(() => {
+    if (tex === 'wood') return worldMaterial({ map: woodTex(), color, scale: 0.8 });
+    if (tex === 'stone') return worldMaterial({ map: stoneTex(), color, scale: 0.6 });
+    return new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: geometry !== 'box' });
+  }, [color, tex, geometry]);
+  useEffect(() => () => mat.dispose(), [mat]);
   if (!blocks.length) return null;
   const url = mapModel(blocks[0].kind);
   if (url) return <>{blocks.map((b) => <ModelAt key={b.id} url={url} block={b} />)}</>;
   return (
-    <Instances limit={blocks.length} castShadow receiveShadow>
+    <Instances limit={blocks.length} castShadow receiveShadow material={mat}>
       {geometry === 'box' ? <boxGeometry args={[1, 1, 1]} /> : <dodecahedronGeometry args={[0.6, 0]} />}
-      <meshStandardMaterial color={color} roughness={0.95} flatShading={geometry !== 'box'} />
       {blocks.map((b) => (
         <Instance key={b.id} position={[b.x, b.h / 2, b.z]} scale={[b.w, b.h, b.d]} />
       ))}
@@ -480,6 +690,14 @@ function Fences({ blocks }: { blocks: MapBlock[] }) {
           <Instance key={i} position={[x, 0.62, z]} />
         ))}
       </Instances>
+      {/* pontas de lança */}
+      <Instances limit={posts.length}>
+        <coneGeometry args={[0.05, 0.16, 4]} />
+        <meshStandardMaterial color="#121414" metalness={0.6} roughness={0.5} />
+        {posts.map(([x, z], i) => (
+          <Instance key={i} position={[x, 1.32, z]} />
+        ))}
+      </Instances>
       {blocks.map((b) => (
         <mesh key={b.id} position={[b.x, 1.05, b.z]}>
           <boxGeometry args={[Math.max(b.w, 0.05), 0.05, Math.max(b.d, 0.05)]} />
@@ -508,84 +726,153 @@ function Bars({ blocks }: { blocks: MapBlock[] }) {
 }
 
 function Fountain({ b }: { b: MapBlock }) {
+  const M = mats();
   const water = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
     if (water.current) (water.current.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.25 + Math.sin(clock.elapsedTime * 1.5) * 0.08;
   });
   return (
     <group position={[b.x, 0, b.z]}>
-      <mesh position={[0, 0.4, 0]} castShadow receiveShadow>
+      <mesh position={[0, 0.4, 0]} castShadow receiveShadow material={M.stone}>
         <cylinderGeometry args={[2.1, 2.3, 0.8, 24]} />
-        <meshStandardMaterial color="#5d5a55" roughness={0.9} />
       </mesh>
       <mesh ref={water} position={[0, 0.78, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[1.85, 24]} />
-        <meshStandardMaterial color="#0e2a30" emissive="#1a5560" emissiveIntensity={0.3} roughness={0.15} metalness={0.3} />
+        <meshStandardMaterial color="#0e2a30" emissive="#1a5560" emissiveIntensity={0.3} roughness={0.08} metalness={0.4} />
       </mesh>
-      <mesh position={[0, 1.4, 0]} castShadow>
+      <mesh position={[0, 1.4, 0]} castShadow material={M.stone}>
         <cylinderGeometry args={[0.25, 0.4, 1.6, 12]} />
-        <meshStandardMaterial color="#6a665f" roughness={0.9} />
       </mesh>
-      <mesh position={[0, 2.25, 0]} castShadow>
+      <mesh position={[0, 2.25, 0]} castShadow material={M.stone}>
         <cylinderGeometry args={[0.8, 0.5, 0.25, 16]} />
-        <meshStandardMaterial color="#6a665f" roughness={0.9} />
       </mesh>
     </group>
   );
 }
 
 function Well({ b }: { b: MapBlock }) {
+  const M = mats();
   return (
     <group position={[b.x, 0, b.z]}>
-      <mesh position={[0, 0.5, 0]} castShadow>
-        <cylinderGeometry args={[0.9, 0.9, 1, 14, 1, true]} />
-        <meshStandardMaterial color="#555049" roughness={1} side={THREE.DoubleSide} />
+      <mesh position={[0, 0.5, 0]} castShadow material={M.stone}>
+        <cylinderGeometry args={[0.9, 0.95, 1, 14]} />
       </mesh>
-      <mesh position={[0, 2.2, 0]} rotation={[0, 0, 0]} castShadow>
-        <coneGeometry args={[1.2, 0.8, 4]} />
-        <meshStandardMaterial color="#3a2a1e" />
+      <mesh position={[0, 1.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.72, 14]} />
+        <meshStandardMaterial color="#05070a" />
+      </mesh>
+      {[-0.8, 0.8].map((x) => (
+        <mesh key={x} position={[x, 1.4, 0]} castShadow material={M.wood}>
+          <boxGeometry args={[0.12, 1.8, 0.12]} />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.9, 0]} rotation={[0, 0, Math.PI / 2]} material={M.wood}>
+        <cylinderGeometry args={[0.07, 0.07, 1.7, 8]} />
+      </mesh>
+      <mesh position={[0, 2.5, 0]} castShadow material={M.wood}>
+        <coneGeometry args={[1.3, 0.8, 4]} />
       </mesh>
     </group>
   );
 }
 
-// ------------------------------------------------------------------ luzes e tochas
+// ------------------------------------------------------------------ luzes e lampiões
 
 const flameMat = new THREE.MeshStandardMaterial({ color: '#FFD9A0', emissive: THEME.warmLight, emissiveIntensity: 2.6, toneMapped: false });
 const deadFlameMat = new THREE.MeshStandardMaterial({ color: '#20242a', roughness: 0.3, metalness: 0.2, transparent: true, opacity: 0.85 });
 const lampPostMat = new THREE.MeshStandardMaterial({ color: '#141515', metalness: 0.5, roughness: 0.6 });
+const lampHaloMat = new THREE.SpriteMaterial({ map: null, color: THEME.warmLight, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false });
+
+const CONE_VERT = /* glsl */ `
+varying float vH;
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  vH = uv.y;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vN = normalize(normalMatrix * normal);
+  vV = normalize(-mv.xyz);
+  gl_Position = projectionMatrix * mv;
+}`;
+const CONE_FRAG = /* glsl */ `
+uniform vec3 uColor;
+uniform float uOpacity;
+varying float vH;
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  float edge = pow(abs(dot(vN, vV)), 1.5);
+  float a = vH * vH * edge * uOpacity;
+  gl_FragColor = vec4(uColor, a);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+const lampConeMat = new THREE.ShaderMaterial({
+  uniforms: { uColor: { value: new THREE.Color(THEME.warmLight) }, uOpacity: { value: 0.14 } },
+  vertexShader: CONE_VERT,
+  fragmentShader: CONE_FRAG,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  side: THREE.DoubleSide,
+});
+const LAMP_CONE_GEO = new THREE.CylinderGeometry(0.2, 2.4, 4, 20, 1, true).translate(0, 2, 0);
 
 /** Bits dos lampiões acesos (os das tarefas começam apagados). */
 function useLampMask(): number {
   return useStore((s) => s.counts?.lamps ?? 0);
 }
 
-/** Lampiões com chama tremulando (a luz pontual vem de WarmLights). Apagados até a tarefa. */
+/** Lampiões: poste, lanterna com vidro aceso, halo na névoa e cone de luz. Apagados até a tarefa. */
 function Lamps() {
   const mask = useLampMask();
+  useMemo(() => {
+    lampHaloMat.map = haloTex();
+    lampHaloMat.needsUpdate = true;
+  }, []);
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
     flameMat.emissiveIntensity = 2.3 + Math.sin(t * 13) * 0.25 + Math.sin(t * 29.7) * 0.15;
+    lampHaloMat.opacity = 0.5 + Math.sin(t * 11) * 0.03;
   });
   return (
     <group>
-      {LAMP_POSITIONS.map(([x, z], i) => (
-        <group key={i} position={[x, 0, z]}>
-          <mesh position={[0, 2.1, 0]} castShadow material={lampPostMat}>
-            <cylinderGeometry args={[0.06, 0.09, 4.2, 6]} />
-          </mesh>
-          <mesh position={[0, 4.2, 0]} material={lampLit(mask, i) ? flameMat : deadFlameMat}>
-            <boxGeometry args={[0.32, 0.44, 0.32]} />
-          </mesh>
-        </group>
-      ))}
+      {LAMP_POSITIONS.map(([x, z], i) => {
+        const lit = lampLit(mask, i);
+        return (
+          <group key={i} position={[x, 0, z]}>
+            <mesh position={[0, 0.2, 0]} castShadow material={lampPostMat}>
+              <cylinderGeometry args={[0.16, 0.2, 0.4, 8]} />
+            </mesh>
+            <mesh position={[0, 2.1, 0]} castShadow material={lampPostMat}>
+              <cylinderGeometry args={[0.055, 0.085, 4.2, 8]} />
+            </mesh>
+            {/* lanterna: vidro, telhadinho e base */}
+            <mesh position={[0, 4.25, 0]} material={lit ? flameMat : deadFlameMat}>
+              <boxGeometry args={[0.28, 0.4, 0.28]} />
+            </mesh>
+            <mesh position={[0, 4.55, 0]} material={lampPostMat} castShadow>
+              <coneGeometry args={[0.26, 0.24, 4]} />
+            </mesh>
+            <mesh position={[0, 4.03, 0]} material={lampPostMat}>
+              <boxGeometry args={[0.34, 0.06, 0.34]} />
+            </mesh>
+            {lit && (
+              <>
+                <sprite material={lampHaloMat} position={[0, 4.25, 0]} scale={[3.4, 3.4, 1]} renderOrder={8} />
+                <mesh geometry={LAMP_CONE_GEO} material={lampConeMat} position={[0, 0.05, 0]} renderOrder={7} />
+              </>
+            )}
+          </group>
+        );
+      })}
     </group>
   );
 }
 
 /**
  * Luzes quentes pontuais: um número fixo (por qualidade) que é reposicionado nos lampiões
- * e janelas mais próximos do jogador. Sem sombras (desempenho) e sem mudar a contagem
+ * acesos e janelas mais próximos do jogador. Sem sombras (desempenho) e sem mudar a contagem
  * de luzes da cena (não recompila shaders).
  */
 function WarmLights({ count }: { count: number }) {
@@ -616,8 +903,12 @@ function WarmLights({ count }: { count: number }) {
     const t = clock.elapsedTime;
     lights.current.forEach((l, k) => {
       const idx = assigned.current[k];
-      if (idx === undefined || !l) return;
-      const s = spots[idx];
+      const s = idx === undefined ? undefined : spots[idx];
+      if (!l) return;
+      if (!s) {
+        l.intensity = 0;
+        return;
+      }
       l.position.set(s.x, s.y, s.z);
       const flicker = 1 + Math.sin(t * 11 + k * 3) * 0.06 + Math.sin(t * 23 + k) * 0.04;
       l.intensity = 16 * s.power * flicker;

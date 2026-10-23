@@ -164,6 +164,10 @@ export function LocalPlayer() {
   const { camera } = useThree();
   const { world, rapier } = useRapier();
   const ray = useMemo(() => new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }), [rapier]);
+  // depuração: controlar a câmera pelo console (só em desenvolvimento)
+  useEffect(() => {
+    if (import.meta.env.DEV) Object.assign(window, { __nevoeiroCam: cam.current });
+  }, []);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.25);

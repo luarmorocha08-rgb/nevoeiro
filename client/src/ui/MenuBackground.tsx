@@ -1,7 +1,8 @@
 import { Canvas } from '@react-three/fiber';
 import { Suspense } from 'react';
 import { CONFIG } from '@nevoeiro/shared';
-import { AmbientParticles, FogLayers } from '../game/Effects';
+import { FogController, FogVeils } from '../game/Atmosphere';
+import { AmbientParticles } from '../game/Effects';
 import { NightLighting } from '../game/GameCanvas';
 import { OrbitCamera } from '../game/Players';
 import { World } from '../game/World';
@@ -17,7 +18,8 @@ export function MenuBackground() {
         <Suspense fallback={null}>
           <World quality={q} physics={false} />
         </Suspense>
-        <FogLayers count={1} />
+        <FogController fixedDensity={CONFIG.graphics.fogDensity * 0.8} />
+        <FogVeils count={8} center={() => ({ x: 0, z: 0 })} />
         <AmbientParticles dust={0} fireflies={30} />
         <OrbitCamera active radius={26} height={9} speed={0.035} />
       </Canvas>
