@@ -10,7 +10,10 @@
     "isolatedModules": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
-    "paths": { "@nevoeiro/shared": ["../shared/src/index.ts"] }
+    "paths": {
+      "@nevoeiro/shared": ["../shared/src/index.ts"],
+      "@nevoeiro/game/*": ["../server/src/game/*"]
+    }
   },
   "include": ["src", "vite.config.ts", "capacitor.config.ts"]
 }

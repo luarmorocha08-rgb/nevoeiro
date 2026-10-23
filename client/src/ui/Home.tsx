@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { SKINS } from '@nevoeiro/shared';
 import { unlockAudio } from '../audio/sfx';
 import { createRoom, joinRoom, serverUrl } from '../net/connection';
+import { startOffline } from '../net/offline';
 import { useStore } from '../net/store';
 
 export function Home() {
@@ -58,6 +59,16 @@ export function Home() {
             </div>
             <button className="btn ghost" disabled={busy} onClick={() => createRoom({ ...opts(), testMode: true })}>
               ◈ Modo de teste (com bots)
+            </button>
+            <button
+              className="btn ghost"
+              disabled={busy}
+              onClick={() => {
+                const o = opts();
+                startOffline(o.name, o.skin);
+              }}
+            >
+              ◇ Jogar offline contra bots (sem servidor)
             </button>
           </div>
 

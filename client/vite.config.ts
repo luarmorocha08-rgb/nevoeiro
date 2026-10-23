@@ -9,6 +9,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@nevoeiro/shared': fileURLToPath(new URL('../shared/src/index.ts', import.meta.url)),
+      // lógica do servidor reaproveitada no modo offline (partida contra bots no navegador)
+      '@nevoeiro/game': fileURLToPath(new URL('../server/src/game', import.meta.url)),
     },
   },
   assetsInclude: ['**/*.glb', '**/*.gltf'],

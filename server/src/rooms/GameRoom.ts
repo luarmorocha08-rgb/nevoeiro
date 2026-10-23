@@ -14,6 +14,7 @@ import {
   type ReportMsg,
   type ToastMsg,
 } from '@nevoeiro/shared';
+import { BOT_NAMES } from '../game/Bots';
 import { Match, type MatchIO } from '../game/Match';
 import type { ServerPlayer } from '../game/types';
 import { createVoiceToken, kickFromVoice } from '../voice/livekit';
@@ -33,10 +34,6 @@ function generateCode(): string {
   }
 }
 
-const BOT_NAMES = [
-  'Bento', 'Clara', 'Davi', 'Elisa', 'Fábio', 'Gema', 'Heitor', 'Iara',
-  'Joaquim', 'Lia', 'Matias', 'Nina', 'Otto', 'Pietra', 'Rui', 'Sofia',
-];
 
 interface CreateOptions {
   testMode?: boolean;

@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import type { ServerPlayer } from './types';
 
 export interface LoggedEvent {
@@ -10,34 +8,32 @@ export interface LoggedEvent {
   [k: string]: unknown;
 }
 
-const LOG_TO_FILE = (process.env.EVENT_LOG_TO_FILE ?? 'true') !== 'false';
+/** Destino extra das linhas do log (o servidor grava em arquivo; no navegador não há). */
+type SinkFactory = (roomCode: string, startedAt: number) => ((line: string) => void) | null;
+let sinkFactory: SinkFactory | null = null;
+export function setEventSinkFactory(f: SinkFactory | null) {
+  sinkFactory = f;
+}
+
+const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
 
 function who(p: ServerPlayer) {
   return { netId: p.netId, name: p.name, role: p.role.id, bot: p.isBot };
 }
 
 /**
- * Log de eventos do servidor: quem matou quem, quando, onde, com qual papel.
- * Vai para o console e (opcionalmente) para server/logs/<sala>-<data>.jsonl
+ * Log de eventos da partida: quem matou quem, quando, onde, com qual papel.
+ * Vai para o console e (no servidor) para server/logs/<sala>-<data>.jsonl
  */
 export class EventLog {
   readonly events: LoggedEvent[] = [];
-  private file: string | null = null;
+  private sink: ((line: string) => void) | null;
 
   constructor(
     private readonly roomCode: string,
     private readonly startedAt: number,
   ) {
-    if (LOG_TO_FILE) {
-      try {
-        const dir = path.resolve(process.cwd(), 'logs');
-        fs.mkdirSync(dir, { recursive: true });
-        const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
-        this.file = path.join(dir, `${roomCode}-${stamp}.jsonl`);
-      } catch {
-        this.file = null;
-      }
-    }
+    this.sink = sinkFactory?.(roomCode, startedAt) ?? null;
   }
 
   add(type: string, data: Record<string, unknown>, now = Date.now()): LoggedEvent {
@@ -50,8 +46,8 @@ export class EventLog {
     const ev: LoggedEvent = { t: now - this.startedAt, iso: new Date(now).toISOString(), type, ...clean };
     this.events.push(ev);
     const line = JSON.stringify(ev);
-    if (process.env.NODE_ENV !== 'test') console.log(`[sala ${this.roomCode}] ${line}`);
-    if (this.file) fs.appendFile(this.file, line + '\n', () => {});
+    if (env.NODE_ENV !== 'test' && env.NEVOEIRO_QUIET !== '1' && 'process' in globalThis) console.log(`[sala ${this.roomCode}] ${line}`);
+    this.sink?.(line);
     return ev;
   }
 }

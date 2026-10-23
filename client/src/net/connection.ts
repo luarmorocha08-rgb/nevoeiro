@@ -139,58 +139,17 @@ function attach(r: Room) {
     state.players?.forEach((p: any) =>
       players.push({ id: p.id, name: p.name, skin: p.skin, isBot: p.isBot, connected: p.connected }),
     );
-    const prevPhase = getState().phase;
-    const phase = state.phase as Phase;
-    const patch: Record<string, unknown> = {
+    applyRoomState({
       players,
-      phase,
+      phase: state.phase as Phase,
       hostId: state.hostId,
       testMode: state.testMode,
       code: state.code || r.roomId,
       revealEndsAt: state.revealEndsAt,
-    };
-    if (phase === 'lobby') {
-      patch.screen = 'lobby';
-      if (prevPhase !== 'lobby') {
-        getState().resetMatch();
-        resetNet();
-        voice.disconnect();
-      }
-    } else {
-      patch.screen = 'game';
-      if (phase === 'reveal' && prevPhase !== 'reveal') patch.showRole = true;
-      if (phase === 'playing' && prevPhase === 'reveal') patch.showRole = false;
-    }
-    getState().set(patch);
+    });
   });
 
-  r.onMessage(S2C.role, (m: RoleMsg) => {
-    getState().set({ role: m, chatChannel: 'local' });
-    r.send(C2S.voiceRequest);
-  });
-  r.onMessage(S2C.snap, (m: SnapshotMsg) => applySnapshot(m));
-  r.onMessage(S2C.alert, (m: AlertMsg) => {
-    getState().pushAlert(m);
-    sfx.play(m.kind === 'revive' ? 'revive' : 'alert');
-  });
-  r.onMessage(S2C.chat, (m: ChatMsg) => {
-    getState().pushChat(m);
-    sfx.play('chat');
-  });
-  r.onMessage(S2C.toast, (m: ToastMsg) => getState().pushToast(m));
-  r.onMessage(S2C.examine, (m: ExamineMsg) => getState().set({ examine: m }));
-  r.onMessage(S2C.fx, (m: FxMsg) => {
-    pushFx(m);
-    const d = Math.hypot(m.x - net.local.x, m.z - net.local.z);
-    if (m.kind === 'shot') sfx.play('shot', Math.max(0.15, 1 - d / 70));
-    else if (d < 30 && m.kind.startsWith('teleport')) sfx.play('teleport', 1 - d / 30);
-    else if (d < 20 && m.kind === 'kill') sfx.play('kill', 1 - d / 20);
-  });
-  r.onMessage(S2C.voice, (m: VoiceTokenMsg) => void voice.connect(m));
-  r.onMessage(S2C.end, (m: EndMsg) => {
-    getState().set({ end: m, chatOpen: false, teleportPicking: false, mapOpen: false });
-    sfx.play('end');
-  });
+  for (const type of Object.values(S2C)) r.onMessage(type, (m: unknown) => handleServerMessage(type, m));
 
   r.onLeave((code) => {
     if (leaving || code === 1000) {
@@ -200,6 +159,77 @@ function attach(r: Room) {
     void reconnectLoop(r.reconnectionToken);
   });
   r.onError((code, message) => console.warn('[sala] erro', code, message));
+}
+
+export interface RoomStateView {
+  players: LobbyPlayerView[];
+  phase: Phase;
+  hostId: string;
+  testMode: boolean;
+  code: string;
+  revealEndsAt: number;
+}
+
+/** Aplica o estado público da sala (online: schema do Colyseus; offline: partida local). */
+export function applyRoomState(view: RoomStateView) {
+  const prevPhase = getState().phase;
+  const patch: Record<string, unknown> = { ...view };
+  if (view.phase === 'lobby') {
+    patch.screen = 'lobby';
+    if (prevPhase !== 'lobby') {
+      getState().resetMatch();
+      resetNet();
+      voice.disconnect();
+    }
+  } else {
+    patch.screen = 'game';
+    if (view.phase === 'reveal' && prevPhase !== 'reveal') patch.showRole = true;
+    if (view.phase === 'playing' && prevPhase === 'reveal') patch.showRole = false;
+  }
+  getState().set(patch);
+}
+
+/** Mensagens do servidor (ou da partida offline). */
+export function handleServerMessage(type: string, m: any) {
+  switch (type) {
+    case S2C.role:
+      getState().set({ role: m as RoleMsg, chatChannel: 'local' });
+      room?.send(C2S.voiceRequest);
+      break;
+    case S2C.snap:
+      applySnapshot(m as SnapshotMsg);
+      break;
+    case S2C.alert:
+      getState().pushAlert(m as AlertMsg);
+      sfx.play((m as AlertMsg).kind === 'revive' ? 'revive' : 'alert');
+      break;
+    case S2C.chat:
+      getState().pushChat(m as ChatMsg);
+      sfx.play('chat');
+      break;
+    case S2C.toast:
+      getState().pushToast(m as ToastMsg);
+      break;
+    case S2C.examine:
+      getState().set({ examine: m as ExamineMsg });
+      break;
+    case S2C.fx: {
+      const f = m as FxMsg;
+      pushFx(f);
+      const d = Math.hypot(f.x - net.local.x, f.z - net.local.z);
+      if (f.kind === 'shot') sfx.play('shot', Math.max(0.15, 1 - d / 70));
+      else if (d < 30 && f.kind.startsWith('teleport')) sfx.play('teleport', 1 - d / 30);
+      else if (d < 20 && f.kind === 'kill') sfx.play('kill', 1 - d / 20);
+      break;
+    }
+    case S2C.voice:
+      void voice.connect(m as VoiceTokenMsg);
+      break;
+    case S2C.end:
+      getState().set({ end: m as EndMsg, chatOpen: false, teleportPicking: false, mapOpen: false });
+      sfx.play('end');
+      break;
+  }
 }
 
 async function reconnectLoop(token: string) {
@@ -237,6 +267,12 @@ function cleanup() {
 }
 
 export function leaveRoom() {
+  if (offlineSink) {
+    offlineSink('leave', null);
+    offlineSink = null;
+    cleanup();
+    return;
+  }
   leaving = true;
   const r = room;
   cleanup();
@@ -245,27 +281,37 @@ export function leaveRoom() {
 
 // ---------------------------------------------------------------- envio
 
+/** Partida offline (contra bots, sem servidor): recebe o que seria enviado ao servidor. */
+let offlineSink: ((type: string, msg: unknown) => void) | null = null;
+export function setOfflineSink(fn: typeof offlineSink) {
+  offlineSink = fn;
+}
+function send(type: string, msg?: unknown) {
+  if (offlineSink) offlineSink(type, msg);
+  else room?.send(type, msg);
+}
+
 export function sendInput(msg: InputMsg) {
-  room?.send(C2S.input, msg);
+  send(C2S.input, msg);
 }
 export function sendAction(msg: ActionMsg) {
-  room?.send(C2S.action, msg);
+  send(C2S.action, msg);
 }
 export function sendChat(text: string, channel: ChatChannel) {
-  room?.send(C2S.chat, { text, channel });
+  send(C2S.chat, { text, channel });
 }
 export function sendLobby(update: { name?: string; skin?: string }) {
-  room?.send(C2S.lobbyUpdate, update);
+  send(C2S.lobbyUpdate, update);
 }
 export function sendStart() {
-  room?.send(C2S.lobbyStart);
+  send(C2S.lobbyStart);
 }
 export function sendBots(count: number) {
-  room?.send(C2S.lobbyBots, { count });
+  send(C2S.lobbyBots, { count });
 }
 export function sendReset() {
-  room?.send(C2S.lobbyReset);
+  send(C2S.lobbyReset);
 }
 export function sendReport(targetId: string, reason: string) {
-  room?.send(C2S.report, { targetId, reason });
+  send(C2S.report, { targetId, reason });
 }

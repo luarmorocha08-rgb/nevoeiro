@@ -9,6 +9,11 @@ import {
 import type { Match } from './Match';
 import type { ServerPlayer } from './types';
 
+export const BOT_NAMES = [
+  'Bento', 'Clara', 'Davi', 'Elisa', 'Fábio', 'Gema', 'Heitor', 'Iara',
+  'Joaquim', 'Lia', 'Matias', 'Nina', 'Otto', 'Pietra', 'Rui', 'Sofia',
+];
+
 const LINES = [
   'Alguém ouviu isso?',
   'Não confio em ninguém aqui.',

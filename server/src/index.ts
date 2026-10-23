@@ -5,8 +5,11 @@ import express from 'express';
 import { Server, matchMaker } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { ROOM_NAME } from '@nevoeiro/shared';
+import { enableFileEventLog } from './game/fileSink';
 import { GameRoom } from './rooms/GameRoom';
 import { voiceEnabled } from './voice/livekit';
+
+enableFileEventLog();
 
 const PORT = Number(process.env.PORT ?? 2567);
 
