@@ -1,0 +1,26 @@
+# Sobe o servidor de jogo + LiveKit (voz) localmente:  docker compose up --build
+# Depois rode o cliente com `npm run dev:client` e abra http://localhost:5173
+services:
+  livekit:
+    image: livekit/livekit-server:v1.9
+    # modo dev: chaves devkey / secret. NÃO use em produção.
+    command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      PORT: 2567
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_PUBLIC_URL: ws://localhost:7880
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secret
+    ports:
+      - "2567:2567"
+    depends_on:
+      - livekit

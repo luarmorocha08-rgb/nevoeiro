@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-electron
+release
+*.log
+server/logs
+.env
+.env.local
+client/android
+client/ios
+.DS_Store
