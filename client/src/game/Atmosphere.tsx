@@ -19,13 +19,14 @@ function insideBuilding(x: number, z: number, pad = 0) {
 }
 
 /** Densidade da neblina: área, dentro de casa, óculos térmicos e sino da igreja. */
-export function FogController({ fixedDensity }: { fixedDensity?: number } = {}) {
+export function FogController({ fixedDensity, lite = false }: { fixedDensity?: number; lite?: boolean } = {}) {
   const { scene } = useThree();
   const current = useRef<number>(CONFIG.graphics.fogDensity);
   useFrame(({ clock }, dt) => {
     const fog = scene.fog as THREE.Fog | null;
     if (!fog) return;
-    fog.near = clock.elapsedTime; // tempo (vento) — ver fog.ts
+    // tempo (vento); negativo = modo leve — ver fog.ts
+    fog.near = lite ? -(clock.elapsedTime + 1) : clock.elapsedTime;
     if (fixedDensity !== undefined) {
       fog.far = fixedDensity;
       return;
@@ -57,6 +58,7 @@ uniform vec3 uMoon;
 uniform vec3 uMoonDir;
 uniform float uTime;
 uniform float uGlow;
+uniform float uClouds;
 varying vec3 vDir;
 float h2(vec2 p) { p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
 float n2(vec2 p) { vec2 i = floor(p); vec2 u = fract(p); u = u * u * (3.0 - 2.0 * u);
@@ -69,9 +71,9 @@ void main() {
   vec3 col = mix(uHorizon, uZenith, smoothstep(0.0, 0.6, h));
   col *= 1.0 + pow(m, 5.0) * uGlow * (1.0 - smoothstep(0.0, 0.45, h));
   // nuvens finas iluminadas pela lua
-  if (h > 0.02) {
+  if (h > 0.02 && uClouds > 0.5) {
     vec2 uv = d.xz / (h + 0.25) * 2.2 + vec2(uTime * 0.008, uTime * 0.003);
-    float c = n2(uv) * 0.6 + n2(uv * 2.3) * 0.3 + n2(uv * 5.1) * 0.1;
+    float c = n2(uv) * 0.65 + n2(uv * 2.3) * 0.35;
     c = smoothstep(0.5, 0.85, c) * smoothstep(0.02, 0.25, h);
     col = mix(col, uHorizon * 1.25 + uMoon * pow(m, 8.0) * 0.25, c * 0.55);
   }
@@ -83,7 +85,7 @@ void main() {
 }`;
 
 /** Domo do céu que acompanha a câmera. */
-export function SkyDome({ stars }: { stars: boolean }) {
+export function SkyDome({ stars, clouds = true }: { stars: boolean; clouds?: boolean }) {
   const group = useRef<THREE.Group>(null);
   const mat = useMemo(
     () =>
@@ -95,6 +97,7 @@ export function SkyDome({ stars }: { stars: boolean }) {
           uMoonDir: { value: MOON_DIR.clone() },
           uTime: { value: 0 },
           uGlow: { value: CONFIG.graphics.fog.moonGlow },
+          uClouds: { value: 1 },
         },
         vertexShader: SKY_VERT,
         fragmentShader: SKY_FRAG,
@@ -112,6 +115,7 @@ export function SkyDome({ stars }: { stars: boolean }) {
   useFrame(({ camera, clock }) => {
     group.current?.position.copy(camera.position);
     mat.uniforms.uTime.value = clock.elapsedTime;
+    mat.uniforms.uClouds.value = clouds ? 1 : 0;
   });
   return (
     <group ref={group}>

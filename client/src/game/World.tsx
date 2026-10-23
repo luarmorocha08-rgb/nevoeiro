@@ -188,7 +188,7 @@ export function World({ quality, physics = true }: { quality: QualityProfile; ph
       <Bars blocks={byKind.bars ?? []} />
       {byKind.fountain?.map((b) => <Fountain key={b.id} b={b} />)}
       {byKind.well?.map((b) => <Well key={b.id} b={b} />)}
-      <Lamps />
+      <Lamps cones={!quality.lite} />
       <WarmLights count={quality.pointLights} />
     </group>
   );
@@ -338,11 +338,26 @@ function Building({ b }: { b: MapBlock }) {
     return out;
   }, [b]);
   const detail = useMemo(() => buildingDetail(b, windows), [b, windows]);
+  // janelas e halos mesclados por casa (poucas chamadas de desenho)
+  const glass = useMemo(() => {
+    const place = (src: THREE.BufferGeometry, list: WindowSpot[], dz = 0) => {
+      if (!list.length) return null;
+      const parts = list.map((w) => src.clone().translate(0, 0, dz).rotateY(w.ry).translate(w.x, w.y, w.z));
+      const g = mergeGeometries(parts);
+      parts.forEach((p) => p.dispose());
+      return g;
+    };
+    const lit = windows.filter((w) => w.lit);
+    return { lit: place(WINDOW_GEO, lit), dark: place(WINDOW_GEO, windows.filter((w) => !w.lit)), halo: place(HALO_GEO, lit, 0.12) };
+  }, [windows]);
   useEffect(() => () => {
     detail.wood?.dispose();
     detail.stone?.dispose();
     detail.header?.dispose();
-  }, [detail]);
+    glass.lit?.dispose();
+    glass.dark?.dispose();
+    glass.halo?.dispose();
+  }, [detail, glass]);
 
   useFrame(() => {
     if (!roof.current) return;
@@ -376,12 +391,9 @@ function Building({ b }: { b: MapBlock }) {
             <boxGeometry args={[roofScale[0] + 0.1, 0.16, 0.22]} />
           </mesh>
         </group>
-        {windows.map((w, i) => (
-          <group key={i} position={[w.x, w.y, w.z]} rotation={[0, w.ry, 0]}>
-            <mesh material={w.lit ? M.windowLit : M.windowDark} geometry={WINDOW_GEO} />
-            {w.lit && <mesh material={M.windowHalo} geometry={HALO_GEO} position={[0, 0, 0.12]} renderOrder={7} />}
-          </group>
-        ))}
+        {glass.lit && <mesh geometry={glass.lit} material={M.windowLit} />}
+        {glass.dark && <mesh geometry={glass.dark} material={M.windowDark} />}
+        {glass.halo && <mesh geometry={glass.halo} material={M.windowHalo} renderOrder={7} />}
         {b.tower && <ChurchTower b={b} wallMat={wallMat} roofMat={roofMat} />}
         {chimney && (
           <mesh position={[chimney.x, chimney.y - 1, chimney.z]} material={M.stone} castShadow>
@@ -397,11 +409,7 @@ function Building({ b }: { b: MapBlock }) {
         <group position={[b.x, b.h, b.z]} rotation={[0, horizontalRidge ? 0 : Math.PI / 2, 0]}>
           <mesh material={roofMat} scale={roofScale} geometry={ROOF_GEO} />
         </group>
-        {windows.filter((w) => w.lit).map((w, i) => (
-          <group key={i} position={[w.x, w.y, w.z]} rotation={[0, w.ry, 0]}>
-            <mesh material={M.windowLit} geometry={WINDOW_GEO} />
-          </group>
-        ))}
+        {glass.lit && <mesh geometry={glass.lit} material={M.windowLit} />}
         {b.tower && <ChurchTower b={b} wallMat={wallMat} roofMat={roofMat} />}
       </group>
     </Detailed>
@@ -824,7 +832,7 @@ function useLampMask(): number {
 }
 
 /** Lampiões: poste, lanterna com vidro aceso, halo na névoa e cone de luz. Apagados até a tarefa. */
-function Lamps() {
+function Lamps({ cones }: { cones: boolean }) {
   const mask = useLampMask();
   useMemo(() => {
     lampHaloMat.map = haloTex();
@@ -860,7 +868,7 @@ function Lamps() {
             {lit && (
               <>
                 <sprite material={lampHaloMat} position={[0, 4.25, 0]} scale={[3.4, 3.4, 1]} renderOrder={8} />
-                <mesh geometry={LAMP_CONE_GEO} material={lampConeMat} position={[0, 0.05, 0]} renderOrder={7} />
+                {cones && <mesh geometry={LAMP_CONE_GEO} material={lampConeMat} position={[0, 0.05, 0]} renderOrder={7} />}
               </>
             )}
           </group>

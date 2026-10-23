@@ -319,8 +319,11 @@ export function groundMaterial() {
       )
       .replace(
         '#include <map_fragment>',
-        `float gn = gNoise(vGround * 0.045) * 0.6 + gNoise(vGround * 0.13) * 0.3 + gNoise(vGround * 0.5) * 0.1;
-        float gm = gNoise(vGround * 0.09 + 17.0);
+        `float gn1 = gNoise(vGround * 0.045);
+        // modo leve (névoa com tempo negativo): uma amostra só
+        float gn2 = fogNear < 0.0 ? gn1 : gNoise(vGround * 0.13);
+        float gn = gn1 * 0.65 + gn2 * 0.35;
+        float gm = gn2 * 0.7 + (1.0 - gn1) * 0.3;
         vec3 grassA = vec3(0.060, 0.085, 0.055);
         vec3 grassB = vec3(0.095, 0.110, 0.065);
         vec3 moss = vec3(0.045, 0.075, 0.060);
@@ -328,11 +331,11 @@ export function groundMaterial() {
         vec3 gcol = mix(grassA, grassB, smoothstep(0.3, 0.75, gn));
         gcol = mix(gcol, moss, smoothstep(0.55, 0.8, gm) * 0.8);
         gcol = mix(gcol, dirt, smoothstep(0.66, 0.84, gn) * 0.85);
-        vec3 det = texture2D(map, vGround * 0.35).rgb * 0.6 + texture2D(map, vGround * 0.08).rgb * 0.4;
+        vec3 det = texture2D(map, vGround * 0.35).rgb;
         diffuseColor.rgb *= gcol * det * 2.4;`,
       );
   };
-  m.customProgramCacheKey = () => 'ground-v1';
+  m.customProgramCacheKey = () => 'ground-v2';
   return m;
 }
 

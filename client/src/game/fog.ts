@@ -6,6 +6,7 @@
  *
  * Os parâmetros fixos vêm de CONFIG.graphics.fog. A cena usa um THREE.Fog só como
  * "transporte" dos uniforms: fogNear = tempo (s), fogFar = densidade atual.
+ * Tempo NEGATIVO = modo leve (qualidade baixa): só uma amostra de ruído por pixel.
  */
 import * as THREE from 'three';
 import { CONFIG } from '@nevoeiro/shared';
@@ -45,12 +46,14 @@ const FRAGMENT = /* glsl */ `
   {
     vec3 fogRay = vFogWorld - cameraPosition;
     float fogDist = length(fogRay);
-    vec2 wind = vec2(fogNear * ${f(F.windX)}, fogNear * ${f(F.windZ)});
+    float fogT = abs(fogNear);
+    vec2 wind = vec2(fogT * ${f(F.windX)}, fogT * ${f(F.windZ)});
     // manchas: no ponto e a meio caminho do olho (parece volume, não textura no chão)
-    vec3 fogMid = cameraPosition + fogRay * 0.55;
-    float fogN = nvNoise(vFogWorld.xz * ${f(F.noiseScale)} + wind) * 0.6
-               + nvNoise(vFogWorld.xz * ${f(F.noiseScale * 2.9)} - wind * 1.7) * 0.15
-               + nvNoise(fogMid.xz * ${f(F.noiseScale * 0.7)} + wind * 0.6) * 0.25;
+    float fogN = nvNoise(vFogWorld.xz * ${f(F.noiseScale)} + wind);
+    if (fogNear >= 0.0) {
+      vec3 fogMid = cameraPosition + fogRay * 0.55;
+      fogN = fogN * 0.65 + nvNoise(fogMid.xz * ${f(F.noiseScale * 0.7)} + wind * 0.6) * 0.35;
+    }
     float fogDens = fogFar * (1.0 + ${f(F.noiseStrength)} * (fogN - 0.5) * 2.0);
     // névoa de altura integrada ao longo do raio
     float fogB = ${f(F.heightFalloff)};

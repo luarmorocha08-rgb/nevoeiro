@@ -10,21 +10,22 @@
 import * as THREE from 'three';
 import { CONFIG } from '@nevoeiro/shared';
 
+type Joint = THREE.Object3D;
 export interface Rig {
-  root: THREE.Group;
-  pelvis: THREE.Group;
-  spine: THREE.Group;
-  head: THREE.Group;
-  shoulderL: THREE.Group;
-  shoulderR: THREE.Group;
-  elbowL: THREE.Group;
-  elbowR: THREE.Group;
-  hipL: THREE.Group;
-  hipR: THREE.Group;
-  kneeL: THREE.Group;
-  kneeR: THREE.Group;
-  ankleL: THREE.Group;
-  ankleR: THREE.Group;
+  root: Joint;
+  pelvis: Joint;
+  spine: Joint;
+  head: Joint;
+  shoulderL: Joint;
+  shoulderR: Joint;
+  elbowL: Joint;
+  elbowR: Joint;
+  hipL: Joint;
+  hipR: Joint;
+  kneeL: Joint;
+  kneeR: Joint;
+  ankleL: Joint;
+  ankleR: Joint;
 }
 
 export interface RigState {
@@ -161,7 +162,7 @@ export function animateRig(rig: Rig, s: RigState, input: RigInput, rawDt: number
   const thighA = lerp(0.5, 0.95, r) * w;
   const kneeK = lerp(0.95, 1.75, r) * w;
   const kneeBase = lerp(0.04, 0.28, r) * w;
-  const leg = (hip: THREE.Group, knee: THREE.Group, ankle: THREE.Group, ph: number) => {
+  const leg = (hip: Joint, knee: Joint, ankle: Joint, ph: number) => {
     const forward = Math.sin(ph); // >0 perna à frente
     const swing = Math.max(0, Math.cos(ph + 0.35)); // joelho dobra no balanço
     const thigh = -thighA * forward - kneeBase * 0.4;
@@ -204,7 +205,7 @@ export function animateRig(rig: Rig, s: RigState, input: RigInput, rawDt: number
   const armA = lerp(0.42, 0.95, r) * w * (1 - s.tiredW * 0.4);
   const elbowBase = lerp(0.18, 1.35, r) * w + (1 - w) * 0.1;
   /** side: lado do ombro no eixo x (-1 ou +1). ph: fase deste braço (>0 = à frente). */
-  const arm = (sh: THREE.Group, el: THREE.Group, side: number, ph: number) => {
+  const arm = (sh: Joint, el: Joint, side: number, ph: number) => {
     const forward = Math.sin(ph);
     // parado: balanço leve; tarefa: braços à frente trabalhando
     const idleSway = (1 - w) * 0.04 * Math.sin(s.time * 1.2 + side);

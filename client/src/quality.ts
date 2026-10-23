@@ -121,6 +121,8 @@ export interface QualityProfile {
   antialias: boolean;
   /** pós-processamento: 0 nenhum, 1 bloom+vinheta+grão, 2 + oclusão de ambiente (SSAO) */
   post: 0 | 1 | 2;
+  /** modo leve: menos ruído na névoa/chão, céu sem nuvens, sem cones de luz */
+  lite: boolean;
   /** tufos de grama com vento */
   grass: number;
   /** véus de névoa (cortinas verticais) */
@@ -138,9 +140,9 @@ export interface QualityProfile {
 }
 
 export const QUALITY_PROFILES: Record<QualityLevel, QualityProfile> = {
-  low: { dpr: [0.6, 0.9], shadows: false, softShadows: false, shadowMapSize: 512, antialias: false, post: 0, fogVeils: 6, grass: 0, dust: 0, fireflies: 10, leaves: 0, smoke: false, pointLights: 3, treeDetail: 5, particles: 160, stars: false },
-  medium: { dpr: [0.9, 1.25], shadows: true, softShadows: false, shadowMapSize: 1024, antialias: false, post: 1, fogVeils: 16, grass: 2600, dust: 60, fireflies: 30, leaves: 40, smoke: true, pointLights: 5, treeDetail: 6, particles: 350, stars: true },
-  high: { dpr: [1, 2], shadows: true, softShadows: true, shadowMapSize: 2048, antialias: false, post: 2, fogVeils: 28, grass: 6500, dust: 140, fireflies: 60, leaves: 90, smoke: true, pointLights: 8, treeDetail: 8, particles: 700, stars: true },
+  low: { dpr: [0.6, 0.9], shadows: false, softShadows: false, shadowMapSize: 512, antialias: false, post: 0, fogVeils: 6, grass: 0, lite: true, dust: 0, fireflies: 10, leaves: 0, smoke: false, pointLights: 3, treeDetail: 5, particles: 160, stars: false },
+  medium: { dpr: [0.9, 1.25], shadows: true, softShadows: false, shadowMapSize: 1024, antialias: false, post: 1, fogVeils: 16, grass: 2600, lite: false, dust: 60, fireflies: 30, leaves: 40, smoke: true, pointLights: 5, treeDetail: 6, particles: 350, stars: true },
+  high: { dpr: [1, 2], shadows: true, softShadows: true, shadowMapSize: 2048, antialias: false, post: 2, fogVeils: 28, grass: 6500, lite: false, dust: 140, fireflies: 60, leaves: 90, smoke: true, pointLights: 8, treeDetail: 8, particles: 700, stars: true },
 };
 
 export const QUALITY_LABEL: Record<QualitySetting, string> = {

@@ -61,7 +61,7 @@ export function NightLighting({ quality, follow = true }: { quality: QualityProf
       <ambientLight color={THEME.night2} intensity={1.6} />
       <hemisphereLight args={[THEME.moonlight, '#151a14', 0.75]} />
       <Moon quality={quality} follow={follow} />
-      <SkyDome stars={quality.stars} />
+      <SkyDome stars={quality.stars} clouds={!quality.lite} />
     </>
   );
 }
@@ -148,7 +148,7 @@ export function GameCanvas() {
       </Suspense>
       <SpectatorCamera />
       <OrbitCamera active={ended} radius={24} height={10} />
-      <FogController />
+      <FogController lite={quality.lite} />
       <FogVeils count={quality.fogVeils} />
       <ThermalVision />
       <AmbientParticles dust={quality.dust} fireflies={quality.fireflies} />

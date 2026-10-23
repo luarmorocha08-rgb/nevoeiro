@@ -18,7 +18,7 @@ export function MenuBackground() {
         <Suspense fallback={null}>
           <World quality={q} physics={false} />
         </Suspense>
-        <FogController fixedDensity={CONFIG.graphics.fogDensity * 0.8} />
+        <FogController fixedDensity={CONFIG.graphics.fogDensity * 0.8} lite />
         <FogVeils count={8} center={() => ({ x: 0, z: 0 })} />
         <AmbientParticles dust={0} fireflies={30} />
         <OrbitCamera active radius={26} height={9} speed={0.035} />
