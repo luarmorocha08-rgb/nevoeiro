@@ -46,7 +46,7 @@ function begin() {
     },
     broadcast: (type, msg) => handleServerMessage(type, msg),
     onVoiceChange: () => {},
-    onPhase: (phase) => applyRoomState(view(phase)),
+    onPhase: (phase, revealEndsAt) => applyRoomState({ ...view(phase), revealEndsAt }),
     onEnd: (msg) => handleServerMessage(S2C.end, msg),
   };
   match = new Match(
@@ -56,9 +56,6 @@ function begin() {
   );
   getState().set({ sessionId: LOCAL_ID, conn: 'online', connError: null });
   applyRoomState(view('reveal'));
-  const self = match.bySession(LOCAL_ID)!;
-  handleServerMessage(S2C.role, match.roleMessage(self));
-  match.sendTasks(self);
   getState().set({
     voice: { ...getState().voice, status: 'unavailable', channel: null, reason: 'Modo offline: sem chat de voz.' },
   });
@@ -68,7 +65,7 @@ function begin() {
   timer = setInterval(() => match?.tick(dt), dt * 1000);
 }
 
-function view(phase: 'lobby' | 'reveal' | 'playing' | 'ended') {
+function view(phase: 'lobby' | 'reveal' | 'playing' | 'intermission' | 'ended') {
   return {
     players,
     phase,

@@ -17,7 +17,7 @@ function run(n: number, seed: number) {
   const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const io: MatchIO = { send() {}, broadcast() {}, onVoiceChange() {}, onPhase() {}, onEnd() {} };
   const parts = Array.from({ length: n }, (_, i) => ({ sessionId: null, name: `B${i}`, skin: 'capuz-vinho', isBot: true }));
-  const m = new Match(io, parts, 'BAL', { clock: () => t, rnd, quietStats: true });
+  const m = new Match(io, parts, 'BAL', { clock: () => t, rnd, quietStats: true, rounds: 1 });
   const step = 0.1;
   for (let x = 0; x < MAX_MIN * 60 && m.phase !== 'ended'; x += step) {
     t += step * 1000;

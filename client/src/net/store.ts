@@ -8,6 +8,7 @@ import type {
   Phase,
   RoleMsg,
   SnapshotMsg,
+  RoundMsg,
   TasksMsg,
   ToastMsg,
   YouSnap,
@@ -136,6 +137,8 @@ interface State {
   marks: Record<string, Mark>;
   /** pessoas que você já viu nesta partida (nome → skin) */
   people: Record<string, string>;
+  /** resultado da última rodada (tela de intervalo) */
+  roundResult: RoundMsg | null;
 }
 
 interface Actions {
@@ -201,6 +204,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   notebookOpen: false,
   marks: {},
   people: {},
+  roundResult: null,
 
   set: (p) => set(p),
 
@@ -269,6 +273,7 @@ export const useStore = create<State & Actions>((set, get) => ({
       notebookOpen: false,
       marks: {},
       people: {},
+      roundResult: null,
     }),
 }));
 

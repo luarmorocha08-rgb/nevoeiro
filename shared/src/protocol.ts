@@ -8,7 +8,7 @@ import type { ActionType, RoleId, Team } from './roles';
 
 export const ROOM_NAME = 'nevoeiro';
 
-export type Phase = 'lobby' | 'reveal' | 'playing' | 'ended';
+export type Phase = 'lobby' | 'reveal' | 'playing' | 'intermission' | 'ended';
 export type ChatChannel = 'local' | 'killers' | 'dead';
 
 // ----------------------------- Cliente → Servidor -----------------------------
@@ -72,6 +72,9 @@ export interface RoleMsg {
   killers: number;
   totalInnocents: number;
   killsNeeded: number;
+  /** rodada atual (1..totalRounds) — os papéis mudam a cada rodada */
+  round: number;
+  totalRounds: number;
 }
 
 export interface AbilityState {
@@ -258,9 +261,35 @@ export interface VoiceTokenMsg {
   reason?: string;
 }
 
-export interface EndMsg {
+export interface ScoreRow {
+  netId: string;
+  name: string;
+  skin: string;
+  points: number;
+  isBot: boolean;
+}
+
+/** Resultado de uma rodada (papéis revelados) — enviado no intervalo e no fim. */
+export interface RoundMsg {
+  round: number;
+  totalRounds: number;
   winner: Team;
   reason: string;
+  durationSec: number;
+  players: EndMsg['players'];
+  scores: ScoreRow[];
+  /** Date.now() do servidor em que a próxima rodada começa (0 = foi a última) */
+  nextAt: number;
+}
+
+export interface EndMsg {
+  /** time que venceu mais rodadas */
+  winner: Team;
+  reason: string;
+  /** resultado de cada rodada */
+  rounds: Omit<RoundMsg, 'scores' | 'nextAt'>[];
+  /** placar final (soma das rodadas), do maior para o menor */
+  scores: ScoreRow[];
   players: {
     netId: string;
     name: string;
@@ -287,4 +316,5 @@ export const S2C = {
   serverTime: 'time',
   ack: 'ack',
   tasks: 'tasks',
+  round: 'round',
 } as const;

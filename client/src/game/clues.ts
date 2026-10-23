@@ -53,6 +53,7 @@ export function namesNear(x: number, z: number, radius: number = CONFIG.feel.clu
 export function addClue(kind: ClueKind, text: string, near?: string[]) {
   const st = getState();
   if (st.phase !== 'playing' && kind !== 'note') return;
+  if (st.phase === 'lobby') return;
   const clue: Clue = { id: seq++, kind, t: matchSeconds(), text, near: near?.length ? near : undefined };
   st.set({ clues: [...st.clues, clue].slice(-80), cluesUnread: st.notebookOpen ? 0 : st.cluesUnread + 1 });
 }

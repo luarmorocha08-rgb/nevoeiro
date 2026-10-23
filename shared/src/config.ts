@@ -137,6 +137,21 @@ export const CONFIG = {
     },
   },
 
+  /** Rodadas: a cada rodada todos voltam vivos e os papéis são sorteados de novo. */
+  rounds: {
+    count: 3,
+    /** intervalo entre rodadas (placar parcial e quem era quem) */
+    intermissionSeconds: 12,
+    /** pontos */
+    points: {
+      win: 3,
+      survive: 1,
+      kill: 1,
+      catchKiller: 2,
+      task: 1,
+    },
+  },
+
   /** "Game feel": câmera, pegadas, lanterna e caderno de pistas (só cliente). */
   feel: {
     /** tremor da câmera por eventos próximos (some até este raio, m) */

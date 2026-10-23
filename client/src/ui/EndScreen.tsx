@@ -4,6 +4,7 @@ import { useStore } from '../net/store';
 import { SkinSwatch } from './SkinSwatch';
 import { Icon } from './Icons';
 import { roleColor } from '../theme';
+import { Scoreboard } from './RoundScreen';
 
 export function EndScreen() {
   const end = useStore((s) => s.end);
@@ -14,12 +15,36 @@ export function EndScreen() {
   const mine = end.players.find((p) => p.netId === myId);
   const won = mine ? mine.team === end.winner : false;
   const sorted = [...end.players].sort((a, b) => (a.team === b.team ? 0 : a.team === 'assassinos' ? -1 : 1));
+  const multi = (end.rounds?.length ?? 0) > 1;
+  const myPos = end.scores?.findIndex((r) => r.netId === myId) ?? -1;
   return (
     <div className={`overlay end ${killersWon ? 'killer' : 'innocent'}`}>
       <div className="end-card panel">
-        <p className="eyebrow">{won ? '◆ Vitória' : '◇ Derrota'} · {Math.floor(end.durationSec / 60)}min {end.durationSec % 60}s</p>
-        <h1 className="end-title">{killersWon ? 'Os assassinos venceram' : 'Os inocentes venceram'}</h1>
+        <p className="eyebrow">
+          {multi ? (myPos === 0 ? '◆ Você foi o melhor da partida' : myPos >= 0 ? `Você ficou em ${myPos + 1}º` : 'Fim da partida') : won ? '◆ Vitória' : '◇ Derrota'} · {Math.floor(end.durationSec / 60)}min {end.durationSec % 60}s
+        </p>
+        <h1 className="end-title">{multi ? `${end.scores[0]?.name ?? ''} venceu a partida` : killersWon ? 'Os assassinos venceram' : 'Os inocentes venceram'}</h1>
         <p className="end-reason">{end.reason}</p>
+        {multi && (
+          <div className="round-cols">
+            <section>
+              <h4>Rodadas</h4>
+              <ul className="round-list">
+                {end.rounds.map((r) => (
+                  <li key={r.round} className={r.winner}>
+                    <strong>Rodada {r.round}</strong> · {r.winner === 'assassinos' ? 'assassinos' : 'inocentes'} venceram
+                    <span className="muted"> — {r.players.filter((p) => p.team === 'assassinos').map((p) => p.name).join(', ')}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <section>
+              <h4>Placar final</h4>
+              <Scoreboard rows={end.scores} myId={myId} />
+            </section>
+          </div>
+        )}
+        {multi && <h4 className="last-round-title">Papéis da última rodada</h4>}
         <div className="end-grid">
           {sorted.map((p) => {
             const info = ROLE_INFO[p.role];

@@ -15,6 +15,7 @@ import { TouchControls } from './TouchControls';
 import { Tutorial } from './Tutorial';
 import { TaskGame, TaskList, TaskPrompt, VillageProgress } from './Tasks';
 import { Notebook, NotebookButton } from './Notebook';
+import { RoundScreen } from './RoundScreen';
 
 export function Hud() {
   const touch = isTouchDevice();
@@ -65,6 +66,7 @@ export function Hud() {
       {showFps && <FpsCounter />}
       <Notebook />
       <MapOverlay />
+      <RoundScreen />
       <RoleReveal />
       <EndScreen />
       {conn === 'reconnecting' && (
@@ -103,6 +105,11 @@ function TopBar() {
           {killer ? 'assassino' : 'inocente'}
         </span>
       </button>
+      {role.totalRounds > 1 && (
+        <span className="round-chip" title="Rodada atual — os papéis mudam a cada rodada">
+          Rodada {role.round}/{role.totalRounds}
+        </span>
+      )}
       {counts && (
         <div className="counter" title="Inocentes vivos · mortes que os assassinos precisam">
           <span className="c-alive">

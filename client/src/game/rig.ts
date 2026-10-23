@@ -73,11 +73,11 @@ export function createRigState(): RigState {
 /** Alturas do esqueleto (m) — compartilhadas com a montagem das malhas. */
 export const RIG = {
   hipY: 0.95,
-  hipX: 0.12,
+  hipX: 0.095,
   thigh: 0.44,
   shin: 0.43,
   shoulderY: 0.47,
-  shoulderX: 0.33,
+  shoulderX: 0.205,
   upperArm: 0.29,
   neckY: 0.58,
 };
@@ -179,30 +179,32 @@ export function animateRig(rig: Rig, s: RigState, input: RigInput, rawDt: number
   rig.hipR.rotation.z = lerp(0.05, 0.02, w);
 
   // ---------- quadril: sobe e desce 2x por passada, gira e balança
-  const bobAmp = lerp(0.028, 0.065, r) * w;
+  const bobAmp = lerp(0.022, 0.045, r) * w;
   const crouch = r * 0.06 + s.taskW * 0.1 + s.tiredW * 0.03;
   const breath = Math.sin(s.time * (1.6 + s.tiredW * 2.4));
   rig.pelvis.position.y = RIG.hipY - crouch + bobAmp * Math.cos(2 * p) - bobAmp * 0.5;
-  rig.pelvis.rotation.y = lerp(0.1, 0.16, r) * w * sinP;
-  rig.pelvis.rotation.z = lerp(0.045, 0.03, r) * w * cosP + (1 - w) * 0.025 * Math.sin(s.time * 0.45);
+  // quadril firme: só um leve giro natural, sem balançar para os lados
+  rig.pelvis.rotation.y = lerp(0.07, 0.06, r) * w * sinP;
+  rig.pelvis.rotation.z = 0;
 
   // ---------- inclinação: corrida, aceleração, cansaço e tarefa
-  const leanTarget = lerp(0.04, 0.26, r) * w + Math.max(-0.12, Math.min(0.22, accel * 0.035)) + s.tiredW * 0.18 + s.taskW * 0.28;
+  const leanTarget = lerp(0.03, 0.14, r) * w + Math.max(-0.06, Math.min(0.1, accel * 0.02)) + s.tiredW * 0.18 + s.taskW * 0.28;
   s.lean = damp(s.lean, leanTarget, 6, dt);
   // curva: inclina para dentro (mais rápido = mais inclinação)
-  const bankTarget = Math.max(-0.2, Math.min(0.2, -yawRate * s.speed * 0.018));
-  s.bank = damp(s.bank, bankTarget, 8, dt);
-  rig.root.rotation.z = s.bank;
+  // sem inclinação lateral nas curvas: o corpo fica reto
+  void yawRate;
+  s.bank = 0;
+  rig.root.rotation.z = 0;
 
   // coluna: contra-gira em relação ao quadril e respira parado
   rig.spine.rotation.x = s.lean;
-  rig.spine.rotation.y = -rig.pelvis.rotation.y * 0.85;
-  rig.spine.rotation.z = -rig.pelvis.rotation.z * 0.6;
+  rig.spine.rotation.y = -rig.pelvis.rotation.y * 0.8;
+  rig.spine.rotation.z = 0;
   const breathAmp = (1 - w) * (0.012 + s.tiredW * 0.025);
   rig.spine.scale.set(1 + breath * breathAmp * 0.5, 1 + breath * breathAmp, 1 + breath * breathAmp * 0.7);
 
   // ---------- braços: opostos às pernas; correndo dobram os cotovelos
-  const armA = lerp(0.42, 0.95, r) * w * (1 - s.tiredW * 0.4);
+  const armA = lerp(0.4, 0.8, r) * w * (1 - s.tiredW * 0.4);
   const elbowBase = lerp(0.18, 1.35, r) * w + (1 - w) * 0.1;
   /** side: lado do ombro no eixo x (-1 ou +1). ph: fase deste braço (>0 = à frente). */
   const arm = (sh: Joint, el: Joint, side: number, ph: number) => {
@@ -213,7 +215,8 @@ export function animateRig(rig: Rig, s: RigState, input: RigInput, rawDt: number
     // rotação x negativa leva a mão para frente
     const swingX = -armA * forward + idleSway;
     sh.rotation.x = lerp(swingX, -1.05 + work * 0.12, s.taskW);
-    sh.rotation.z = side * (lerp(0.07, 0.16, r) * w + (1 - w) * 0.06 + s.taskW * -0.12);
+    // braços um pouco afastados do quadril (sem atravessar o corpo)
+    sh.rotation.z = side * (lerp(0.11, 0.14, r) * w + (1 - w) * 0.1 + s.taskW * -0.08);
     const elbow = elbowBase + Math.max(0, forward) * 0.25 * w;
     el.rotation.x = -lerp(elbow, 0.55 + work * 0.15, s.taskW);
   };
@@ -230,7 +233,7 @@ export function animateRig(rig: Rig, s: RigState, input: RigInput, rawDt: number
   s.lookYaw = damp(s.lookYaw, (1 - w) * (1 - s.taskW) * s.lookTarget, 3, dt);
   rig.head.rotation.y = s.lookYaw - rig.spine.rotation.y * 0.6;
   rig.head.rotation.x = -s.lean * 0.65 + s.taskW * 0.45 + bobAmp * Math.cos(2 * p) * 1.5;
-  rig.head.rotation.z = -rig.spine.rotation.z * 0.5;
+  rig.head.rotation.z = 0;
 }
 
 /** Pose largada do corpo caído (variação estável por skin). */

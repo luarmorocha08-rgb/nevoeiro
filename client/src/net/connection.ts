@@ -13,6 +13,7 @@ import {
   type InputMsg,
   type Phase,
   type RoleMsg,
+  type RoundMsg,
   type SnapshotMsg,
   type ToastMsg,
   type AckMsg,
@@ -201,9 +202,39 @@ export function applyRoomState(view: RoomStateView) {
 /** Mensagens do servidor (ou da partida offline). */
 export function handleServerMessage(type: string, m: any) {
   switch (type) {
-    case S2C.role:
-      getState().set({ role: m as RoleMsg, chatChannel: 'local' });
+    case S2C.role: {
+      const r = m as RoleMsg;
+      const st = getState();
+      if (st.role && st.role.round !== r.round) {
+        // nova rodada: papéis sorteados de novo — limpa o que era da rodada anterior
+        net.bodies.clear();
+        net.fx = [];
+        st.set({
+          roundResult: null,
+          bodies: [],
+          alerts: [],
+          markers: [],
+          examine: null,
+          target: null,
+          bodyTarget: null,
+          teleportPicking: false,
+          tasks: null,
+          taskOpen: null,
+          taskNear: null,
+          feedback: null,
+          // as marcas valiam para os papéis antigos
+          marks: {},
+          showRole: true,
+        });
+        addClue('note', `— Rodada ${r.round} de ${r.totalRounds}: papéis sorteados de novo —`);
+      }
+      st.set({ role: r, chatChannel: 'local' });
       room?.send(C2S.voiceRequest);
+      break;
+    }
+    case S2C.round:
+      getState().set({ roundResult: m as RoundMsg, taskOpen: null, chatOpen: false, teleportPicking: false });
+      sfx.play('end');
       break;
     case S2C.snap:
       applySnapshot(m as SnapshotMsg);

@@ -26,9 +26,13 @@ export function RoleReveal() {
   const color = roleColor(role.role);
   return (
     <div className="overlay reveal" onClick={() => phase !== 'reveal' && set({ showRole: false })}>
-      <div className="flip-card">
+      {/* key: a carta vira de novo a cada rodada */}
+      <div className="flip-card" key={role.round}>
         <div className="card-face card-back">N</div>
         <div className="card-face card-front" style={{ '--c': color } as CSSProperties}>
+          {role.totalRounds > 1 && (
+            <p className="round-tag">Rodada {role.round} de {role.totalRounds}{role.round > 1 ? ' · papel novo' : ''}</p>
+          )}
           <p className="eyebrow" style={{ color: teamColor(info.team) }}>
             {killer ? '◆ Você é um ASSASSINO' : '● Você é INOCENTE'}
           </p>

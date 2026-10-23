@@ -392,7 +392,12 @@ ou use CI). Se o `npm install` pulou o download do Electron, rode `npx electron 
 ## Personagens .glb e mapa modular
 
 ### Personagens
-Hoje os personagens são **cápsulas coloridas** com as cores das 16 skins da arte de referência.
+O placeholder atual é um **corpo humano procedural** (`client/src/game/characterMesh.ts`): pernas,
+braços e tronco por revolução de perfis anatômicos, juntas que dobram suave (cada vértice dividido
+entre dois ossos), rosto com olhos, íris, sobrancelhas, nariz, orelhas e boca, mãos com polegar,
+calça, cinto, camisa com gola e mangas e 4 estilos de cabelo, nas cores das 16 skins. É uma malha
+só com esqueleto (1 chamada de desenho por personagem). Para ver de perto em desenvolvimento:
+`/?anim&view=close`.
 Para usar os modelos finais, solte os arquivos em **`client/assets/characters/`**:
 
 - `<id-da-skin>.glb` (ex.: `capuz-vinho.glb`) ou `default.glb` para todas;
@@ -420,7 +425,16 @@ Todos os números estão em `shared/src/config.ts`.
   Zumbi e Teleportador, sem repetir. Assassinos sabem quem são os parceiros (e têm canal de texto secreto).
 - Inocentes com poder: Xerife, Detetive, Anjo e Rastreador (1 de cada). O resto é **Civil**.
 
-**Vitória**
+**Rodadas**
+- Cada partida tem **3 rodadas** (`CONFIG.rounds.count`). No fim de cada uma aparece o intervalo
+  (12 s): quem venceu, **quem eram os assassinos** e o placar parcial.
+- Na rodada seguinte todos voltam vivos para a praça e os **papéis são sorteados de novo** — quem
+  foi Civil pode virar assassino, Xerife, Detetive…; ninguém repete o papel da rodada anterior
+  (quando possível). Tarefas, lampiões, corpos e marcas do caderno recomeçam.
+- **Pontos** (`CONFIG.rounds.points`): time vencedor +3, sobreviver +1, cada morte como assassino +1,
+  prender ou derrubar um assassino +2, cada tarefa real +1. Ganha a partida quem somar mais.
+
+**Vitória (de cada rodada)**
 - Assassinos: quando **50%** dos inocentes (civis contam) estão mortos.
 - Inocentes: quando todos os assassinos foram **eliminados pelo Xerife** ou **presos pelo Detetive**
   (um Zumbi aguardando o retorno ainda conta como vivo) **ou** quando a vila conclui **80%** das tarefas

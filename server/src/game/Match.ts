@@ -17,6 +17,8 @@ import {
   shuffle,
   type TaskOpMsg,
   type TasksMsg,
+  type RoundMsg,
+  type ScoreRow,
   type AckMsg,
   type HideSpot,
   type ActionMsg,
@@ -49,9 +51,11 @@ export interface MatchIO {
   broadcast(type: string, msg: unknown): void;
   /** O jogador mudou de vivo/morto: trocar o canal de voz. */
   onVoiceChange(p: ServerPlayer): void;
-  onPhase(phase: 'reveal' | 'playing' | 'ended'): void;
+  onPhase(phase: MatchPhase, revealEndsAt: number): void;
   onEnd(msg: EndMsg): void;
 }
+
+export type MatchPhase = 'reveal' | 'playing' | 'intermission' | 'ended';
 
 export interface Participant {
   sessionId: string | null;
@@ -66,6 +70,8 @@ export interface MatchOptions {
   revealSeconds?: number;
   /** não imprimir o resumo de balanço (simulações em lote) */
   quietStats?: boolean;
+  /** número de rodadas (padrão CONFIG.rounds.count) */
+  rounds?: number;
 }
 
 let netCounter = 0;
@@ -94,14 +100,23 @@ export class Match {
   readonly bodies = new Map<string, Body>();
   readonly log: EventLog;
   readonly startedAt: number;
-  phase: 'reveal' | 'playing' | 'ended' = 'reveal';
-  readonly revealEndsAt: number;
-  readonly totalInnocents: number;
-  readonly killersCount: number;
-  readonly needed: number;
+  phase: MatchPhase = 'reveal';
+  revealEndsAt = 0;
+  totalInnocents = 0;
+  killersCount = 0;
+  needed = 1;
   /** tarefas de inocentes concluídas / necessárias */
   tasksDone = 0;
-  readonly tasksNeeded: number;
+  tasksNeeded = 1;
+  /** rodadas: a cada uma os papéis são sorteados de novo */
+  round = 0;
+  readonly totalRounds: number;
+  roundStartedAt = 0;
+  intermissionEndsAt = 0;
+  readonly scores = new Map<string, number>();
+  readonly roundResults: EndMsg['rounds'] = [];
+  lastRound: RoundMsg | null = null;
+  private readonly revealSeconds: number;
   /** bits dos lampiões acesos pelas tarefas */
   lampsMask = 0;
 
@@ -128,10 +143,10 @@ export class Match {
     this.revealEndsAt = now + (opts.revealSeconds ?? CONFIG.match.revealSeconds) * 1000;
     this.log = new EventLog(code, now);
 
-    const roles = assignRoles(participants.length, this.rnd);
-    const spawns = [...SPAWN_POINTS].sort(() => this.rnd() - 0.5);
-    participants.forEach((part, i) => {
-      const [sx, sz] = spawns[i % spawns.length];
+    this.totalRounds = Math.max(1, opts.rounds ?? CONFIG.rounds.count);
+    this.revealSeconds = opts.revealSeconds ?? CONFIG.match.revealSeconds;
+
+    for (const part of participants) {
       const p: ServerPlayer = {
         sessionId: part.sessionId,
         netId: makeNetId(),
@@ -139,13 +154,13 @@ export class Match {
         skin: part.skin,
         isBot: part.isBot,
         connected: !part.isBot,
-        x: sx,
-        z: sz,
+        x: 0,
+        z: 0,
         vx: 0,
         vz: 0,
         stamina: CONFIG.move.stamina.max,
         exhausted: false,
-        yaw: Math.atan2(-sx, -sz),
+        yaw: 0,
         moving: 0,
         alive: true,
         arrested: false,
@@ -160,21 +175,73 @@ export class Match {
         tasks: [],
         taskActive: null,
       };
+      this.players.set(p.netId, p);
+      this.scores.set(p.netId, 0);
+    }
+    this.startRound(1);
+  }
+
+  // ------------------------------------------------------------------ rodadas
+
+  /**
+   * Começa uma rodada: todos voltam vivos para a praça, papéis sorteados de novo
+   * (evitando repetir o papel da rodada anterior), tarefas e lampiões zerados.
+   */
+  private startRound(n: number): void {
+    const now = this.now();
+    const all = [...this.players.values()];
+    const previous = new Map(all.map((p) => [p.netId, p.role?.id]));
+    const roles = assignRoles(all.length, this.rnd);
+    // troca papéis para que ninguém repita o da rodada anterior (quando possível)
+    for (let i = 0; i < roles.length; i++) {
+      if (roles[i] !== previous.get(all[i].netId)) continue;
+      for (let j = 0; j < roles.length; j++) {
+        if (j === i || roles[j] === roles[i]) continue;
+        if (roles[j] !== previous.get(all[i].netId) && roles[i] !== previous.get(all[j].netId)) {
+          [roles[i], roles[j]] = [roles[j], roles[i]];
+          break;
+        }
+      }
+    }
+    this.round = n;
+    this.roundStartedAt = now;
+    this.revealEndsAt = now + this.revealSeconds * 1000;
+    this.bodies.clear();
+    this.recentDeaths = [];
+    this.lampsMask = 0;
+    this.tasksDone = 0;
+    const spawns = [...SPAWN_POINTS].sort(() => this.rnd() - 0.5);
+    all.forEach((p, i) => {
+      const wasDead = !p.alive;
+      const [sx, sz] = spawns[i % spawns.length];
+      p.x = sx;
+      p.z = sz;
+      p.vx = 0;
+      p.vz = 0;
+      p.yaw = Math.atan2(-sx, -sz);
+      p.moving = 0;
+      p.stamina = CONFIG.move.stamina.max;
+      p.exhausted = false;
+      p.alive = true;
+      p.arrested = false;
+      p.diedAt = 0;
+      p.frozenUntil = 0;
+      p.taskActive = null;
       p.role = createRole(roles[i], p, this);
       p.role.init(this.revealEndsAt);
-      if (part.isBot) p.bot = new BotBrain(this.rnd);
-      this.players.set(p.netId, p);
+      if (p.isBot) p.bot = new BotBrain(this.rnd);
+      if (wasDead && n > 1) this.io.onVoiceChange(p);
     });
-
-    const all = [...this.players.values()];
     this.killersCount = all.filter((p) => p.role.isKiller).length;
     this.totalInnocents = all.length - this.killersCount;
     this.needed = killsNeeded(this.totalInnocents);
     this.tasksNeeded = this.assignTasks(all);
+    this.phase = 'reveal';
 
     this.log.add(
-      'match_start',
+      n === 1 ? 'match_start' : 'round_start',
       {
+        round: n,
         players: all.map((p) => ({ netId: p.netId, name: p.name, role: p.role.id, bot: p.isBot })),
         killers: this.killersCount,
         innocents: this.totalInnocents,
@@ -182,7 +249,65 @@ export class Match {
       },
       now,
     );
-    this.note(`Partida iniciada com ${all.length} jogadores (${this.killersCount} assassinos).`);
+    this.note(`Rodada ${n} de ${this.totalRounds}: ${all.length} jogadores (${this.killersCount} assassinos).`);
+    this.io.onPhase('reveal', this.revealEndsAt);
+    for (const p of all) {
+      if (p.isBot) continue;
+      this.io.send(p, S2C.role, this.roleMessage(p));
+      this.sendTasks(p);
+    }
+  }
+
+  private addPoints(p: ServerPlayer | undefined, pts: number): void {
+    if (!p) return;
+    this.scores.set(p.netId, (this.scores.get(p.netId) ?? 0) + pts);
+  }
+
+  scoreRows(): ScoreRow[] {
+    return [...this.players.values()]
+      .map((p) => ({ netId: p.netId, name: p.name, skin: p.skin, points: this.scores.get(p.netId) ?? 0, isBot: p.isBot }))
+      .sort((a, b) => b.points - a.points);
+  }
+
+  private playersSummary(): EndMsg['players'] {
+    return [...this.players.values()].map((p) => ({
+      netId: p.netId,
+      name: p.name,
+      skin: p.skin,
+      role: p.role.id,
+      team: p.role.team,
+      status: p.arrested ? 'preso' : p.alive ? 'vivo' : 'morto',
+      isBot: p.isBot,
+    }));
+  }
+
+  /** Fim de uma rodada: pontua, revela os papéis e agenda a próxima (ou encerra a partida). */
+  private endRound(winner: Team, reason: string): void {
+    if (this.phase !== 'playing' && this.phase !== 'reveal') return;
+    const now = this.now();
+    const P = CONFIG.rounds.points;
+    for (const p of this.players.values()) {
+      if (p.role.team === winner) this.addPoints(p, P.win);
+      if (p.alive) this.addPoints(p, P.survive);
+      p.taskActive = null;
+    }
+    const durationSec = Math.round((now - this.roundStartedAt) / 1000);
+    const result = { round: this.round, totalRounds: this.totalRounds, winner, reason, durationSec, players: this.playersSummary() };
+    this.roundResults.push(result);
+    this.note(`Fim da rodada ${this.round}: vitória dos ${winner}. ${reason}`);
+    this.log.add('round_end', { round: this.round, winner, reason }, now);
+    const list = [...this.players.values()];
+    recordMatch({ winner, durationSec, players: list.length, humans: list.filter((p) => p.sessionId !== null || !p.isBot).length });
+    if (this.round >= this.totalRounds) {
+      this.lastRound = { ...result, scores: this.scoreRows(), nextAt: 0 };
+      this.end();
+      return;
+    }
+    this.phase = 'intermission';
+    this.intermissionEndsAt = now + CONFIG.rounds.intermissionSeconds * 1000;
+    this.lastRound = { ...result, scores: this.scoreRows(), nextAt: this.intermissionEndsAt };
+    this.io.onPhase('intermission', this.revealEndsAt);
+    this.io.broadcast(S2C.round, this.lastRound);
   }
 
   now(): number {
@@ -245,6 +370,8 @@ export class Match {
       killers: this.killersCount,
       totalInnocents: this.totalInnocents,
       killsNeeded: this.needed,
+      round: this.round,
+      totalRounds: this.totalRounds,
     };
   }
 
@@ -322,6 +449,7 @@ export class Match {
       return ok();
     }
     this.tasksDone++;
+    this.addPoints(p, CONFIG.rounds.points.task);
     this.log.add('task_done', { actor: p, task: st.id, done: this.tasksDone, needed: this.tasksNeeded }, now);
     if (st.visual && 'lamp' in st.visual) {
       this.lampsMask |= 1 << st.visual.lamp;
@@ -445,6 +573,10 @@ export class Match {
     if (!victim.alive) return;
     const now = this.now();
     const outcome = victim.role.onDeath(now);
+    // pontos: assassino que mata; quem derruba um assassino (tiro do Xerife)
+    const P = CONFIG.rounds.points;
+    if (info.cause === 'kill' && info.killer && info.killer !== victim) this.addPoints(info.killer, P.kill);
+    if (info.cause === 'shot' && info.killer && victim.role.isKiller) this.addPoints(info.killer, P.catchKiller);
     victim.alive = false;
     victim.diedAt = now;
     victim.frozenUntil = 0;
@@ -502,6 +634,7 @@ export class Match {
     if (!target.alive) return;
     const now = this.now();
     target.role.onDeath(now);
+    if (target.role.isKiller) this.addPoints(by, CONFIG.rounds.points.catchKiller);
     if (target.role instanceof Zumbi) target.role.cancelReturn();
     target.alive = false;
     target.arrested = true;
@@ -629,8 +762,11 @@ export class Match {
     const now = this.now();
     if (this.phase === 'reveal' && now >= this.revealEndsAt) {
       this.phase = 'playing';
-      this.io.onPhase('playing');
-      this.log.add('playing', {}, now);
+      this.io.onPhase('playing', this.revealEndsAt);
+      this.log.add('playing', { round: this.round }, now);
+    }
+    if (this.phase === 'intermission' && now >= this.intermissionEndsAt) {
+      this.startRound(this.round + 1);
     }
     for (const p of this.players.values()) {
       p.role.tick(now);
@@ -762,56 +898,52 @@ export class Match {
   // ------------------------------------------------------------------ vitória
 
   checkWin(): void {
-    if (this.phase === 'ended') return;
+    if (this.phase !== 'playing') return;
     const all = [...this.players.values()];
     const innocents = all.filter((p) => !p.role.isKiller);
     const dead = innocents.filter((p) => !p.alive).length;
     if (dead >= this.needed) {
-      this.end('assassinos', `Os assassinos mataram ${dead} de ${this.totalInnocents} inocentes.`);
+      this.endRound('assassinos', `Os assassinos mataram ${dead} de ${this.totalInnocents} inocentes.`);
       return;
     }
     const killersLeft = all.filter(
       (p) => p.role.isKiller && (p.alive || (p.role instanceof Zumbi && p.role.isPendingReturn && !p.arrested)),
     );
     if (killersLeft.length === 0) {
-      this.end('inocentes', 'Todos os assassinos foram eliminados ou presos.');
+      this.endRound('inocentes', 'Todos os assassinos foram eliminados ou presos.');
       return;
     }
     if (this.tasksDone >= this.tasksNeeded) {
-      this.end('inocentes', 'A vila terminou as tarefas: os lampiões acesos e o sino espantaram o mal.');
+      this.endRound('inocentes', 'A vila terminou as tarefas: os lampiões acesos e o sino espantaram o mal.');
     }
   }
 
-  end(winner: Team, reason: string): void {
+  /** Fim da partida (depois da última rodada). Vence o time com mais rodadas; o placar soma tudo. */
+  end(): void {
     if (this.phase === 'ended') return;
     this.phase = 'ended';
     const now = this.now();
-    this.note(`Fim: vitória dos ${winner}. ${reason}`);
+    const inn = this.roundResults.filter((r) => r.winner === 'inocentes').length;
+    const kil = this.roundResults.length - inn;
+    const winner: Team = inn === kil ? (this.roundResults[this.roundResults.length - 1]?.winner ?? 'inocentes') : inn > kil ? 'inocentes' : 'assassinos';
+    const scores = this.scoreRows();
+    const reason =
+      this.totalRounds === 1
+        ? this.roundResults[0]?.reason ?? ''
+        : `Inocentes venceram ${inn} e assassinos ${kil} de ${this.roundResults.length} rodadas. Maior pontuação: ${scores[0]?.name ?? '—'} (${scores[0]?.points ?? 0}).`;
+    this.note(`Fim da partida. ${reason}`);
     this.endMsg = {
       winner,
       reason,
+      rounds: this.roundResults,
+      scores,
       durationSec: Math.round((now - this.startedAt) / 1000),
       timeline: this.timeline,
-      players: [...this.players.values()].map((p) => ({
-        netId: p.netId,
-        name: p.name,
-        skin: p.skin,
-        role: p.role.id,
-        team: p.role.team,
-        status: p.arrested ? 'preso' : p.alive ? 'vivo' : 'morto',
-        isBot: p.isBot,
-      })),
+      players: this.playersSummary(),
     };
-    this.log.add('match_end', { winner, reason }, now);
-    const list = [...this.players.values()];
-    recordMatch({
-      winner,
-      durationSec: this.endMsg.durationSec,
-      players: list.length,
-      humans: list.filter((p) => p.sessionId !== null || !p.isBot).length,
-    });
+    this.log.add('match_end', { winner, reason, scores }, now);
     if (!this.quietStats) logSummary();
-    this.io.onPhase('ended');
+    this.io.onPhase('ended', this.revealEndsAt);
     this.io.onEnd(this.endMsg);
   }
 

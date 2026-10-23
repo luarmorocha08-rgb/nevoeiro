@@ -17,8 +17,27 @@ function Actor({ x, speed, task = false, tired = false, skin }: { x: number; spe
   );
 }
 
+function Close() {
+  // rostos de perto: 4 skins (estilos de cabelo diferentes), parados, de frente
+  const skins = ['capuz-vinho', 'cardigan-lavanda', 'sueter-mostarda', 'gola-creme'];
+  return (
+    <Canvas camera={{ position: [0, 1.62, 2.1], fov: 40 }} style={{ position: 'fixed', inset: 0, background: '#2a3040' }}>
+      <ambientLight intensity={1.3} />
+      <directionalLight position={[2, 4, 4]} intensity={2.4} />
+      {skins.map((s, i) => (
+        <group key={s} position={[(i - 1.5) * 0.55, 0, 0]}>
+          <CharacterModel skin={s} motion={{ current: { speed: 0 } }} />
+        </group>
+      ))}
+      <OrbitControls target={[0, 1.55, 0]} />
+    </Canvas>
+  );
+}
+
 export function AnimPreview() {
-  const side = new URLSearchParams(location.search).get('view') !== 'front';
+  const view = new URLSearchParams(location.search).get('view');
+  if (view === 'close') return <Close />;
+  const side = view !== 'front';
   return (
     <Canvas shadows camera={{ position: side ? [0, 1.3, 7] : [7, 1.3, 0.01], fov: 45 }} style={{ position: 'fixed', inset: 0, background: '#2a3040' }}>
       <ambientLight intensity={1.2} />

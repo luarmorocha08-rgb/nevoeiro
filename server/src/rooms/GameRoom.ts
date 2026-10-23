@@ -232,21 +232,18 @@ export class GameRoom extends Room<GameState> {
       },
       broadcast: (type, msg) => this.broadcast(type, msg),
       onVoiceChange: (p) => void this.sendVoiceToken(p),
-      onPhase: (phase) => {
+      onPhase: (phase, revealEndsAt) => {
         this.state.phase = phase;
+        this.state.revealEndsAt = revealEndsAt;
       },
       onEnd: (msg: EndMsg) => this.broadcast(S2C.end, msg),
     };
 
+    // a partida envia papéis e tarefas sozinha a cada rodada
     this.match = new Match(io, participants, this.roomId);
-    this.state.phase = 'reveal';
+    this.state.phase = this.match.phase;
     this.state.revealEndsAt = this.match.revealEndsAt;
     this.lock();
-    for (const p of this.match.players.values()) {
-      if (!p.sessionId) continue;
-      this.clientsBySession.get(p.sessionId)?.send(S2C.role, this.match.roleMessage(p));
-      this.match.sendTasks(p);
-    }
   }
 
   private update(dtMs: number) {
@@ -257,6 +254,7 @@ export class GameRoom extends Room<GameState> {
     if (!this.match) return;
     client.send(S2C.role, this.match.roleMessage(p));
     client.send(S2C.tasks, this.match.tasksMessage(p));
+    if (this.match.phase === 'intermission' && this.match.lastRound) client.send(S2C.round, this.match.lastRound);
     if (this.match.result) client.send(S2C.end, this.match.result);
     void this.sendVoiceToken(p);
   }

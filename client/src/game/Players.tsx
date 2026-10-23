@@ -347,7 +347,7 @@ export function LocalPlayer() {
       const amp = CONFIG.feel.bobWalk * walkK + (CONFIG.feel.bobRun - CONFIG.feel.bobWalk) * runK;
       bobPhase.current += dt * (sp / (runK > 0.5 ? CONFIG.audio.stepLengthRun : CONFIG.audio.stepLengthWalk)) * Math.PI;
       const bob = Math.abs(Math.sin(bobPhase.current)) * amp;
-      const sway = Math.cos(bobPhase.current) * amp * 0.5;
+      const sway = 0; // sem balanço lateral (só sobe e desce)
       // tremor: ruído rápido que decai; mais forte com tensão alta (mãos tremendo)
       const sh = feel.shake * feel.shake * 0.35 + feel.tension * 0.012;
       const t = nowP / 1000;

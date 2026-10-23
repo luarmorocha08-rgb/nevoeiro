@@ -28,7 +28,7 @@ assert.equal(killersFor(15), 4);
 assert.equal(killersFor(16), 4);
 console.log('✓ sorteio de papéis');
 
-function makeMatch(n: number, seed = 1) {
+function makeMatch(n: number, seed = 1, rounds = 1) {
   let t = 1_000_000;
   const clock = () => t;
   let s = seed;
@@ -44,7 +44,7 @@ function makeMatch(n: number, seed = 1) {
     onEnd: (m) => (end = m),
   };
   const parts = Array.from({ length: n }, (_, i) => ({ sessionId: null, name: `P${i}`, skin: 'capuz-vinho', isBot: true }));
-  const m = new Match(io, parts, 'TEST', { clock, rnd, quietStats: true });
+  const m = new Match(io, parts, 'TEST', { clock, rnd, quietStats: true, rounds });
   return {
     m,
     sent,
@@ -279,6 +279,54 @@ const killers = (m: Match) => [...m.players.values()].filter((p) => p.role.isKil
   g.m.taskOp(inn, { op: 'finish', id: lst.id });
   assert.equal(g.end?.winner, 'inocentes', 'tarefas completas = inocentes vencem');
   console.log('✓ tarefas (validação, falsas, lampião, vitória)');
+}
+
+// ---- rodadas: papéis mudam, todos revivem, pontos acumulam, termina após a última
+{
+  const g = makeMatch(10, 11, 3);
+  g.advance(CONFIG.match.revealSeconds + 1);
+  for (const p of g.m.players.values()) p.bot = undefined;
+  assert.equal(g.m.round, 1);
+  const rolesR1 = new Map([...g.m.players.values()].map((p) => [p.netId, p.role.id]));
+  const roleMsgs1 = g.sent.filter((x) => x.type === 'role').length;
+  // rodada 1: inocentes vencem prendendo/matando todos os assassinos
+  const ks = killers(g.m);
+  const det = byRole(g.m, 'detetive');
+  // prisão cancela a volta do Zumbi
+  for (const k of ks) g.m.arrest(k, det);
+  assert.equal(g.m.phase, 'intermission', 'intervalo depois da rodada');
+  assert.equal(g.end, null, 'partida ainda não acabou');
+  assert.ok(g.broadcasts.some((b) => b.type === 'round' && b.msg.round === 1 && b.msg.winner === 'inocentes'), 'resultado da rodada');
+  assert.ok((g.m.scores.get(det.netId) ?? 0) >= CONFIG.rounds.points.win + 2 * CONFIG.rounds.points.catchKiller, 'detetive pontua');
+  g.advance(CONFIG.rounds.intermissionSeconds + 0.5);
+  assert.equal(g.m.round, 2, 'rodada 2');
+  assert.equal(g.m.phase, 'reveal');
+  const all = [...g.m.players.values()];
+  assert.ok(all.every((p) => p.alive && !p.arrested), 'todos vivos de novo');
+  const changed = all.filter((p) => p.role.id !== rolesR1.get(p.netId)).length;
+  assert.ok(changed >= all.length - 1, `papéis sorteados de novo (${changed}/${all.length} mudaram)`);
+  assert.equal(killers(g.m).length, CONFIG.killersByPlayers[0].killers, 'número de assassinos mantido');
+  assert.equal(g.m.bodies.size, 0, 'sem corpos');
+  assert.equal(g.m.tasksDone, 0, 'tarefas zeradas');
+  void roleMsgs1;
+  // rodadas 2 e 3: assassinos vencem
+  for (const r of [2, 3]) {
+    g.advance(CONFIG.match.revealSeconds + 1);
+    for (const p of g.m.players.values()) p.bot = undefined;
+    const k = killers(g.m)[0];
+    const inn = [...g.m.players.values()].filter((p) => !p.role.isKiller);
+    for (let i = 0; i < g.m.needed; i++) g.m.killPlayer(inn[i], { cause: 'kill', killer: k, label: k.role.id });
+    if (r === 2) {
+      assert.equal(g.m.phase, 'intermission');
+      g.advance(CONFIG.rounds.intermissionSeconds + 0.5);
+    }
+  }
+  const fin = g.end as EndMsg | null;
+  assert.ok(fin, 'partida termina depois da 3ª rodada');
+  assert.equal(fin.rounds.length, 3);
+  assert.equal(fin.winner, 'assassinos', 'time com mais rodadas');
+  assert.ok(fin.scores[0].points >= fin.scores[fin.scores.length - 1].points, 'placar ordenado');
+  console.log(`✓ rodadas (3 rodadas, papéis novos, placar: ${fin.scores[0].name} ${fin.scores[0].points} pts)`);
 }
 
 // ---- partida inteira com bots termina com vencedor
