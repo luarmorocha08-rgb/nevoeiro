@@ -44,6 +44,7 @@ export interface RoleInfo {
   description: string;
   passive?: string;
   abilities: AbilityDef[];
+  /** cor de destaque do papel (espelha client/src/theme.ts) */
   color: string;
 }
 
@@ -64,7 +65,7 @@ export const ROLE_INFO: Record<RoleId, RoleInfo> = {
     id: 'metamorfo',
     name: 'Metamorfo',
     team: 'assassinos',
-    color: '#b3262e',
+    color: '#B07CFF',
     tagline: 'Use o rosto deles contra eles.',
     description: `Copia a aparência e o nome de outro jogador por ${R.metamorfo.duration}s (recarga ${R.metamorfo.cooldown}s). Se matar transformado, o corpo registra "Metamorfo".`,
     abilities: [
@@ -84,7 +85,7 @@ export const ROLE_INFO: Record<RoleId, RoleInfo> = {
     id: 'fantasma',
     name: 'Fantasma',
     team: 'assassinos',
-    color: '#b3262e',
+    color: '#C9D6E8',
     tagline: 'Ninguém vê o que a neblina engole.',
     description: `Fica invisível por ${R.fantasma.duration}s (recarga ${R.fantasma.cooldown}s). Não pode matar enquanto invisível. Sua voz continua saindo, mas sem indicador de quem fala.`,
     abilities: [
@@ -103,7 +104,7 @@ export const ROLE_INFO: Record<RoleId, RoleInfo> = {
     id: 'zumbi',
     name: 'Zumbi',
     team: 'assassinos',
-    color: '#b3262e',
+    color: '#7BC74D',
     tagline: 'A cova não te segura.',
     description: `Ao ser eliminado, volta ao jogo após ${R.zumbi.returnDelay}s em um ponto aleatório — os outros não são avisados. Depois de voltar, só pode matar ${R.zumbi.killsAfterReturn} vez; se cair de novo, morre de vez.`,
     passive: 'Retorno da cova',
@@ -113,7 +114,7 @@ export const ROLE_INFO: Record<RoleId, RoleInfo> = {
     id: 'teleportador',
     name: 'Teleportador',
     team: 'assassinos',
-    color: '#b3262e',
+    color: '#3FB6FF',
     tagline: 'Esteja em todo lugar.',
     description: `Escolhe qualquer ponto do mapa pelo minimapa e se teleporta (recarga ${R.teleportador.cooldown}s).`,
     abilities: [
@@ -132,7 +133,7 @@ export const ROLE_INFO: Record<RoleId, RoleInfo> = {
     id: 'xerife',
     name: 'Xerife',
     team: 'inocentes',
-    color: '#d9a441',
+    color: '#E8B04A',
     tagline: 'Uma bala. Escolha bem.',
     description: `Atira em um jogador (alcance médio, 1 tiro a cada ${R.xerife.cooldown}s). Se acertar um assassino, ele morre. Se acertar um inocente, morrem o inocente E o xerife.`,
     abilities: [
@@ -151,7 +152,7 @@ export const ROLE_INFO: Record<RoleId, RoleInfo> = {
     id: 'detetive',
     name: 'Detetive',
     team: 'inocentes',
-    color: '#4fb6b0',
+    color: '#D9C27A',
     tagline: 'Os mortos também falam.',
     description: `EXAMINAR CORPO revela há quanto tempo a vítima morreu e que tipo de assassino a matou. ALGEMAR prende quem estiver perto: se for assassino, sai da partida; se for inocente, você perde a algema por ${R.detetive.wrongCuffPenalty}s e ele fica imobilizado por ${R.detetive.immobilizeSeconds}s.`,
     abilities: [
@@ -179,7 +180,7 @@ export const ROLE_INFO: Record<RoleId, RoleInfo> = {
     id: 'anjo',
     name: 'Anjo',
     team: 'inocentes',
-    color: '#e8e2c9',
+    color: '#FFE7A3',
     tagline: 'Uma vida volta. Só uma.',
     description:
       'Ressuscita UM jogador morto tocando no corpo (uso único na partida). O jogador volta com o mesmo papel.',
@@ -199,7 +200,7 @@ export const ROLE_INFO: Record<RoleId, RoleInfo> = {
     id: 'rastreador',
     name: 'Rastreador',
     team: 'inocentes',
-    color: '#e0703a',
+    color: '#FF6B3D',
     tagline: 'O calor não mente.',
     description: `Ativa os óculos de calor por ${R.rastreador.duration}s e vê a silhueta térmica de todos, através de paredes e da neblina — inclusive o Fantasma invisível (recarga ${R.rastreador.cooldown}s).`,
     abilities: [
@@ -217,7 +218,7 @@ export const ROLE_INFO: Record<RoleId, RoleInfo> = {
     id: 'civil',
     name: 'Civil',
     team: 'inocentes',
-    color: '#9aa7ad',
+    color: '#8A93A6',
     tagline: 'Observe. Esconda-se. Sobreviva.',
     description:
       'Inocente sem habilidade. Observe, converse, esconda-se e fuja. Cada civil vivo atrasa a vitória dos assassinos.',

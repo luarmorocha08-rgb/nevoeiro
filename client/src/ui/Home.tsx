@@ -25,8 +25,6 @@ export function Home() {
 
   return (
     <div className="home">
-      <div className="fog-layer fog-a" />
-      <div className="fog-layer fog-b" />
       <div className="home-inner">
         <p className="eyebrow">◇ Uma vila. Uma noite. Ninguém é quem parece.</p>
         <h1 className="logo">

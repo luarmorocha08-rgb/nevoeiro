@@ -1,5 +1,6 @@
 import { CONFIG, EF, ROLE_INFO, type AbilityDef } from '@nevoeiro/shared';
 import { sfx } from '../audio/sfx';
+import { onActionDenied } from './feedback';
 import { sendAction } from '../net/connection';
 import { net } from '../net/netState';
 import { getState, type TargetView } from '../net/store';
@@ -59,7 +60,7 @@ export function triggerAbility(slot: number) {
   if (!ability) return;
   const state = st.you.abilities.find((a) => a.action === ability.action);
   if (state && (state.cd > 0 || state.blocked)) {
-    sfx.play('deny');
+    onActionDenied();
     st.pushToast({ text: state.blocked ?? `Recarregando (${Math.ceil(state.cd / 1000)}s)`, level: 'warn' });
     return;
   }
@@ -74,7 +75,7 @@ export function triggerAbility(slot: number) {
     case 'player': {
       const t = pickPlayerTarget(ability);
       if (!t) {
-        sfx.play('deny');
+        onActionDenied();
         st.pushToast({ text: 'Ninguém ao alcance.', level: 'warn' });
         return;
       }
@@ -84,7 +85,7 @@ export function triggerAbility(slot: number) {
     case 'body': {
       const t = pickBodyTarget(ability);
       if (!t) {
-        sfx.play('deny');
+        onActionDenied();
         st.pushToast({ text: 'Nenhum corpo por perto.', level: 'warn' });
         return;
       }

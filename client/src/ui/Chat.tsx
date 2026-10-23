@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CONFIG, filterProfanity, type ChatChannel } from '@nevoeiro/shared';
 import { sendChat, sendReport } from '../net/connection';
 import { useStore } from '../net/store';
+import { Icon } from './Icons';
 
 const CHANNEL_LABEL: Record<ChatChannel, string> = {
   local: 'Perto',
@@ -31,9 +32,10 @@ export function Chat({ compact }: { compact: boolean }) {
       ? ['dead', 'killers']
       : ['dead'];
 
+  const channelsKey = channels.join(',');
   useEffect(() => {
-    if (!channels.includes(channel)) set({ chatChannel: channels[0] });
-  }, [alive, channel, channels, set]);
+    if (!channelsKey.split(',').includes(channel)) set({ chatChannel: channelsKey.split(',')[0] as ChatChannel });
+  }, [channelsKey, channel, set]);
 
   useEffect(() => {
     if (open) {
@@ -114,7 +116,7 @@ export function Chat({ compact }: { compact: boolean }) {
         </div>
       ) : (
         compact && (
-          <button className="btn small chat-open-btn" onClick={() => set({ chatOpen: true })}>💬 Chat</button>
+          <button className="btn small chat-open-btn" onClick={() => set({ chatOpen: true })}><Icon name="chat" size={16} /> Chat</button>
         )
       )}
     </div>

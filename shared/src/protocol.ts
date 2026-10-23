@@ -91,6 +91,8 @@ export const EF = {
   FROZEN: 16,
   /** Aliado assassino (só aparece para assassinos). */
   ALLY: 32,
+  /** Escondido (só quem pode ver recebe: parceiro, mesmo esconderijo, espectador). */
+  HIDDEN: 64,
 } as const;
 
 export interface EntitySnap {
@@ -114,11 +116,21 @@ export interface BodySnap {
   x: number;
   z: number;
   y: number;
+  /** ms desde a morte (para a animação de queda) */
+  a: number;
 }
 
 export interface YouSnap {
   x: number;
   z: number;
+  vx: number;
+  vz: number;
+  stamina: number;
+  exhausted: boolean;
+  /** nome do esconderijo em que você está (ou null) */
+  hidden: string | null;
+  /** 0..1 — tensão da trilha (só inocentes; assassino perto ou morte recente) */
+  tension: number;
   ack: number;
   alive: boolean;
   /** espectador: morto, preso ou aguardando retorno */
@@ -181,11 +193,30 @@ export interface ExamineMsg {
 }
 
 export interface FxMsg {
-  kind: 'shot' | 'teleport-out' | 'teleport-in' | 'morph' | 'kill' | 'revive' | 'cuff';
+  kind:
+    | 'shot'
+    | 'teleport-out'
+    | 'teleport-in'
+    | 'morph'
+    | 'kill'
+    | 'revive'
+    | 'cuff'
+    | 'vanish'
+    | 'appear'
+    | 'zombie'
+    | 'examine';
   x: number;
   z: number;
   x2?: number;
   z2?: number;
+  /** jogador envolvido (dissolver/aparecer) */
+  id?: string;
+}
+
+/** Confirmação de ação bem-sucedida (som, vibração e texto curto no cliente). */
+export interface AckMsg {
+  action: ActionType;
+  text: string;
 }
 
 export interface VoiceTokenMsg {
@@ -224,4 +255,5 @@ export const S2C = {
   voice: 'voice',
   end: 'end',
   serverTime: 'time',
+  ack: 'ack',
 } as const;

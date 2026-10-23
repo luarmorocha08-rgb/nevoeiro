@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { ROLE_INFO } from '@nevoeiro/shared';
 import { serverNow } from '../net/netState';
 import { useStore } from '../net/store';
+import { roleColor, teamColor } from '../theme';
+import { Icon } from './Icons';
 
-/** Tela de revelação do papel (início da partida) e consulta (Tab / toque no papel). */
+/** Revelação do papel: carta que vira com a cor do papel (início da partida e Tab). */
 export function RoleReveal() {
   const role = useStore((s) => s.role);
   const show = useStore((s) => s.showRole);
@@ -21,44 +23,49 @@ export function RoleReveal() {
   if (!role || !show) return null;
   const info = ROLE_INFO[role.role];
   const killer = info.team === 'assassinos';
+  const color = roleColor(role.role);
   return (
-    <div className={`overlay reveal ${killer ? 'killer' : 'innocent'}`} onClick={() => phase !== 'reveal' && set({ showRole: false })}>
-      <div className="reveal-card">
-        <p className="eyebrow">{killer ? '◆ Você é um ASSASSINO' : '◇ Você é INOCENTE'}</p>
-        <h1 className="reveal-title" style={{ color: info.color }}>{info.name}</h1>
-        <p className="reveal-tag">“{info.tagline}”</p>
-        <p className="reveal-desc">{info.description}</p>
-        {info.abilities.length > 0 && (
-          <ul className="reveal-abilities">
-            {info.abilities.map((a) => (
-              <li key={a.action}>
-                <span className="ab-icon">{a.icon}</span>
-                <strong>{a.label}</strong> <span className="muted">· {a.hint}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {killer && role.partners.length > 0 && (
-          <div className="partners">
-            <span className="eyebrow">Seus parceiros</span>
-            {role.partners.map((p) => (
-              <div key={p.netId} className="partner">
-                {p.name} — <em>{ROLE_INFO[p.role].name}</em>
-              </div>
-            ))}
-            <p className="muted small">Canal secreto: selecione "Assassinos" no chat.</p>
+    <div className="overlay reveal" onClick={() => phase !== 'reveal' && set({ showRole: false })}>
+      <div className="flip-card">
+        <div className="card-face card-back">N</div>
+        <div className="card-face card-front" style={{ '--c': color } as CSSProperties}>
+          <p className="eyebrow" style={{ color: teamColor(info.team) }}>
+            {killer ? '◆ Você é um ASSASSINO' : '● Você é INOCENTE'}
+          </p>
+          <div className="card-sigil">
+            <Icon name={role.role} size={52} strokeWidth={1.4} />
           </div>
-        )}
-        <p className="reveal-goal">
-          {killer
-            ? `Objetivo: matar ${role.killsNeeded} de ${role.totalInnocents} inocentes.`
-            : `Objetivo: eliminar ou prender os ${role.killers} assassinos antes que matem ${role.killsNeeded} inocentes.`}
-        </p>
-        {phase === 'reveal' ? (
-          <p className="countdown">A névoa se fecha em {left}s…</p>
-        ) : (
-          <p className="muted small">Toque para fechar</p>
-        )}
+          <h1 className="reveal-title">{info.name}</h1>
+          <p className="reveal-tag">“{info.tagline}”</p>
+          <p className="reveal-desc">{info.description}</p>
+          {info.abilities.length > 0 && (
+            <ul className="reveal-abilities">
+              {info.abilities.map((a, i) => (
+                <li key={a.action}>
+                  <Icon name={a.action} size={18} color={color} />
+                  <strong>{a.label}</strong> <span className="muted">· {['Q', 'E'][i]} · {a.hint}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {killer && role.partners.length > 0 && (
+            <div className="partners">
+              <span className="eyebrow">Seus parceiros</span>
+              {role.partners.map((p) => (
+                <div key={p.netId} className="partner">
+                  ◆ {p.name} — <em style={{ color: roleColor(p.role) }}>{ROLE_INFO[p.role].name}</em>
+                </div>
+              ))}
+              <p className="muted small">Canal secreto: selecione "Assassinos" no chat.</p>
+            </div>
+          )}
+          <p className="reveal-goal">
+            {killer
+              ? `Objetivo: matar ${role.killsNeeded} de ${role.totalInnocents} inocentes.`
+              : `Objetivo: eliminar ou prender os ${role.killers} assassinos antes que matem ${role.killsNeeded} inocentes.`}
+          </p>
+          {phase === 'reveal' ? <p className="countdown">A névoa se fecha em {left}s…</p> : <p className="countdown">Toque para fechar</p>}
+        </div>
       </div>
     </div>
   );

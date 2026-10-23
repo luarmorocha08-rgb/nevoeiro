@@ -3,6 +3,7 @@ import { LOCATIONS, MAP_BLOCKS, WORLD } from '@nevoeiro/shared';
 import { confirmTeleport } from '../game/abilities';
 import { net } from '../net/netState';
 import { getState, useStore } from '../net/store';
+import { THEME } from '../theme';
 
 const W = WORLD.half;
 
@@ -10,7 +11,7 @@ const W = WORLD.half;
 function drawBase(ctx: CanvasRenderingContext2D, size: number) {
   const s = size / (W * 2);
   const tx = (x: number) => (x + W) * s;
-  ctx.fillStyle = '#0c1213';
+  ctx.fillStyle = THEME.night;
   ctx.fillRect(0, 0, size, size);
   for (const l of LOCATIONS) {
     ctx.fillStyle = l.color + '88';
@@ -30,7 +31,7 @@ function drawBase(ctx: CanvasRenderingContext2D, size: number) {
   if (size > 200) {
     ctx.font = `${Math.round(size / 42)}px Cinzel, serif`;
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#d9d2c3';
+    ctx.fillStyle = THEME.text;
     for (const l of LOCATIONS) ctx.fillText(l.name, tx((l.minX + l.maxX) / 2), tx((l.minZ + l.maxZ) / 2));
   }
 }
@@ -64,16 +65,16 @@ function MapCanvas({ size, interactive }: { size: number; interactive: boolean }
       for (const m of getState().markers) {
         if (m.until < now) continue;
         const pulse = 0.5 + Math.sin(t / 140) * 0.5;
-        ctx.strokeStyle = m.kind === 'revive' ? '#f4e9c8' : '#ff3b3b';
+        ctx.strokeStyle = m.kind === 'revive' ? THEME.alert.revive : m.kind === 'arrest' ? THEME.alert.arrest : THEME.team.assassinos;
         ctx.lineWidth = 2 * dpr;
         ctx.beginPath();
         ctx.arc(tx(m.x), tx(m.z), (5 + pulse * 5) * dpr, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = m.kind === 'revive' ? '#f4e9c8' : '#ff3b3b';
+        ctx.fillStyle = m.kind === 'revive' ? THEME.alert.revive : m.kind === 'arrest' ? THEME.alert.arrest : THEME.team.assassinos;
         ctx.font = `${12 * dpr}px serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(m.kind === 'revive' ? '✦' : '✝', tx(m.x), tx(m.z));
+        ctx.fillText(m.kind === 'revive' ? '✦' : m.kind === 'arrest' ? '⛓' : '✝', tx(m.x), tx(m.z));
       }
       // você
       const you = getState().you;
@@ -82,7 +83,7 @@ function MapCanvas({ size, interactive }: { size: number; interactive: boolean }
       ctx.save();
       ctx.translate(x, z);
       ctx.rotate(-net.cameraYaw);
-      ctx.fillStyle = you?.alive === false ? '#9aa7ad' : '#4fe3d4';
+      ctx.fillStyle = you?.alive === false ? THEME.textMuted : THEME.moonlight;
       ctx.beginPath();
       ctx.moveTo(0, 7 * dpr);
       ctx.lineTo(-5 * dpr, -5 * dpr);

@@ -5,7 +5,7 @@
 process.env.NODE_ENV = 'test';
 process.env.EVENT_LOG_TO_FILE = 'false';
 import assert from 'node:assert/strict';
-import { CONFIG, killersFor, type EndMsg } from '@nevoeiro/shared';
+import { CONFIG, HIDE_SPOTS, initialMoveState, killersFor, stepMovement, type EndMsg } from '@nevoeiro/shared';
 import { Match, type MatchIO } from '../game/Match';
 import { assignRoles } from '../game/RoleAssigner';
 import type { ServerPlayer } from '../game/types';
@@ -44,7 +44,7 @@ function makeMatch(n: number, seed = 1) {
     onEnd: (m) => (end = m),
   };
   const parts = Array.from({ length: n }, (_, i) => ({ sessionId: null, name: `P${i}`, skin: 'capuz-vinho', isBot: true }));
-  const m = new Match(io, parts, 'TEST', { clock, rnd });
+  const m = new Match(io, parts, 'TEST', { clock, rnd, quietStats: true });
   return {
     m,
     sent,
@@ -171,6 +171,40 @@ const killers = (m: Match) => [...m.players.values()].filter((p) => p.role.isKil
     console.log('✓ fantasma invisível / rastreador');
     break;
   }
+}
+
+// ---- esconderijo: ninguém vê nem mira quem está escondido (exceto parceiro / rastreador)
+{
+  const g = makeMatch(10, 5);
+  g.advance(CONFIG.match.revealSeconds + CONFIG.match.initialCooldown + 1);
+  for (const p of g.m.players.values()) { p.bot = undefined; p.alive = true; }
+  const k = killers(g.m)[0];
+  const civ = civils(g.m)[0];
+  const tracker = byRole(g.m, 'rastreador');
+  const bush = HIDE_SPOTS.find((h) => h.kind === 'bush')!;
+  place(civ, bush.x, bush.z); place(k, bush.x + 1.6, bush.z); place(tracker, bush.x - 6, bush.z);
+  const sk = g.m.snapshotFor(k, g.m.now());
+  assert.ok(!sk.e.some((e) => e.id === civ.netId), 'assassino não vê quem está no arbusto');
+  g.m.handleAction(k, { type: 'kill', targetId: civ.netId });
+  assert.equal(civ.alive, true, 'não dá para matar quem está escondido');
+  g.m.handleAction(tracker, { type: 'thermal' });
+  assert.ok(g.m.snapshotFor(tracker, g.m.now()).th?.some((e) => e.id === civ.netId), 'rastreador vê pelo calor');
+  assert.equal(g.m.snapshotFor(civ, g.m.now()).you.hidden, bush.label);
+  console.log('✓ esconderijos');
+}
+
+// ---- movimento: aceleração, stamina e predição idêntica cliente/servidor
+{
+  let s = initialMoveState(0, 9);
+  s = stepMovement(s, { mx: 1, mz: 0, run: false, dt: 1 / 30 });
+  assert.ok(s.vx > 0 && s.vx < CONFIG.move.walkSpeed, 'acelera aos poucos');
+  for (let i = 0; i < 30 * 6; i++) s = stepMovement(s, { mx: 1, mz: 0, run: true, dt: 1 / 30 });
+  assert.ok(s.exhausted, 'stamina acaba correndo');
+  assert.ok(Math.hypot(s.vx, s.vz) <= CONFIG.move.walkSpeed + 0.01, 'exausto anda');
+  const a = stepMovement(s, { mx: 0.3, mz: 0.7, run: true, dt: 1 / 30 });
+  const b = stepMovement(s, { mx: 0.3, mz: 0.7, run: true, dt: 1 / 30 });
+  assert.deepEqual(a, b, 'determinístico');
+  console.log('✓ aceleração e stamina');
 }
 
 // ---- partida inteira com bots termina com vencedor

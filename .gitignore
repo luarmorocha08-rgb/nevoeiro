@@ -9,3 +9,4 @@ server/logs
 client/android
 client/ios
 .DS_Store
+deploy/

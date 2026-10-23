@@ -25,7 +25,6 @@ export function Lobby() {
 
   return (
     <div className="lobby">
-      <div className="fog-layer fog-a" />
       <header className="lobby-head">
         <button className="link" onClick={leaveRoom}>← Sair</button>
         <div className="room-code">

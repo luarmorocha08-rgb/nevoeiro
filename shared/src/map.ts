@@ -70,7 +70,10 @@ export type BlockKind =
   | 'rock'
   | 'bed'
   | 'sofa'
-  | 'well';
+  | 'well'
+  | 'wardrobe'
+  | 'bush'
+  | 'haypile';
 
 export interface MapBlock {
   id: string;
@@ -90,6 +93,8 @@ export interface MapBlock {
   color?: string;
   roofColor?: string;
   tower?: boolean;
+  /** construção com chaminé soltando fumaça */
+  chimney?: boolean;
 }
 
 /** Retângulo de colisão alinhado aos eixos. */
@@ -117,15 +122,15 @@ function add(b: Omit<MapBlock, 'id'> & { id?: string }) {
 
 // Construções principais (paredes com porta = dá pra entrar e se esconder)
 add({ id: 'igreja', kind: 'building', x: 0, z: -48, w: 14, d: 24, h: 9, door: 's', collide: true, location: 'igreja', label: 'Igreja', color: '#5b5560', roofColor: '#2a2630', tower: true });
-add({ id: 'taverna', kind: 'building', x: 33, z: -8, w: 14, d: 10, h: 6, door: 'w', collide: true, location: 'taverna', label: 'Taverna', color: '#6b5440', roofColor: '#3a2a20' });
-add({ id: 'delegacia', kind: 'building', x: -31, z: -6, w: 12, d: 10, h: 6, door: 'e', collide: true, location: 'delegacia', label: 'Delegacia', color: '#4d5a66', roofColor: '#262d36' });
-add({ id: 'casarao', kind: 'building', x: 4, z: 52, w: 22, d: 16, h: 8, door: 'n', collide: true, location: 'casarao', label: 'Casarão', color: '#54495c', roofColor: '#241e2a' });
+add({ id: 'taverna', kind: 'building', chimney: true, x: 33, z: -8, w: 14, d: 10, h: 6, door: 'w', collide: true, location: 'taverna', label: 'Taverna', color: '#6b5440', roofColor: '#3a2a20' });
+add({ id: 'delegacia', kind: 'building', chimney: true, x: -31, z: -6, w: 12, d: 10, h: 6, door: 'e', collide: true, location: 'delegacia', label: 'Delegacia', color: '#4d5a66', roofColor: '#262d36' });
+add({ id: 'casarao', kind: 'building', chimney: true, x: 4, z: 52, w: 22, d: 16, h: 8, door: 'n', collide: true, location: 'casarao', label: 'Casarão', color: '#54495c', roofColor: '#241e2a' });
 add({ id: 'celeiro', kind: 'building', x: 47, z: 43, w: 16, d: 20, h: 8, door: 'w', collide: true, location: 'celeiro', label: 'Celeiro', color: '#6e3428', roofColor: '#3a1c16' });
-add({ id: 'casa-1', kind: 'building', x: 24, z: 24, w: 8, d: 8, h: 5, door: 'w', collide: true, color: '#5e5a52', roofColor: '#2f2b26' });
-add({ id: 'casa-2', kind: 'building', x: -24, z: 24, w: 8, d: 8, h: 5, door: 'e', collide: true, color: '#56584f', roofColor: '#2b2c26' });
-add({ id: 'casa-3', kind: 'building', x: 52, z: -40, w: 8, d: 8, h: 5, door: 's', collide: true, color: '#5a5048', roofColor: '#2c2420' });
-add({ id: 'casa-4', kind: 'building', x: -62, z: -12, w: 8, d: 7, h: 5, door: 'e', collide: true, color: '#4f5258', roofColor: '#25272b' });
-add({ id: 'casa-5', kind: 'building', x: 26, z: -42, w: 8, d: 8, h: 5, door: 'w', collide: true, color: '#5c544c', roofColor: '#2b2622' });
+add({ id: 'casa-1', kind: 'building', chimney: true, x: 24, z: 24, w: 8, d: 8, h: 5, door: 'w', collide: true, color: '#5e5a52', roofColor: '#2f2b26' });
+add({ id: 'casa-2', kind: 'building', chimney: true, x: -24, z: 24, w: 8, d: 8, h: 5, door: 'e', collide: true, color: '#56584f', roofColor: '#2b2c26' });
+add({ id: 'casa-3', kind: 'building', chimney: true, x: 52, z: -40, w: 8, d: 8, h: 5, door: 's', collide: true, color: '#5a5048', roofColor: '#2c2420' });
+add({ id: 'casa-4', kind: 'building', chimney: true, x: -62, z: -12, w: 8, d: 7, h: 5, door: 'e', collide: true, color: '#4f5258', roofColor: '#25272b' });
+add({ id: 'casa-5', kind: 'building', chimney: true, x: 26, z: -42, w: 8, d: 8, h: 5, door: 'w', collide: true, color: '#5c544c', roofColor: '#2b2622' });
 
 // Interior da igreja
 for (let row = 0; row < 5; row++) {
@@ -146,8 +151,8 @@ add({ kind: 'desk', x: -28.5, z: -8.5, w: 2.4, d: 1, h: 0.9, collide: true, loca
 add({ kind: 'bars', x: -33.5, z: -6, w: 0.15, d: 5, h: 2.6, collide: true, location: 'delegacia' });
 
 // Interior do casarão (parede interna com passagem)
-add({ kind: 'wall', x: 4, z: 46.2, w: WALL_THICKNESS, d: 4.4, h: 8, collide: true, location: 'casarao', color: '#54495c' });
-add({ kind: 'wall', x: 4, z: 57, w: WALL_THICKNESS, d: 6, h: 8, collide: true, location: 'casarao', color: '#54495c' });
+add({ kind: 'wall', x: 4, z: 49.5, w: WALL_THICKNESS, d: 3, h: 8, collide: true, location: 'casarao', color: '#54495c' });
+add({ kind: 'wall', x: 4, z: 57.2, w: WALL_THICKNESS, d: 5.6, h: 8, collide: true, location: 'casarao', color: '#54495c' });
 add({ kind: 'sofa', x: -3, z: 55, w: 3, d: 1, h: 0.9, collide: true, location: 'casarao' });
 add({ kind: 'bed', x: 11, z: 57, w: 2, d: 3, h: 0.7, collide: true, location: 'casarao' });
 add({ kind: 'table', x: -2, z: 49, w: 2.2, d: 1.2, h: 0.8, collide: true, location: 'casarao' });
@@ -246,6 +251,78 @@ while (rocks < 18 && guard++ < 2000) {
   rocks++;
 }
 
+// ---------------------------------------------------------------------------
+// Esconderijos: quem está dentro não é visto (exceto pelo Rastreador com calor)
+// ---------------------------------------------------------------------------
+
+export type HideKind = 'wardrobe' | 'haypile' | 'bush';
+
+export interface HideSpot {
+  id: string;
+  kind: HideKind;
+  x: number;
+  z: number;
+  /** raio da área escondida */
+  r: number;
+  /** wardrobe: para onde fica a abertura */
+  open?: Side;
+  label: string;
+}
+
+const hideSpots: HideSpot[] = [];
+const PANEL = 0.12;
+
+/** Armário aberto de um lado: 3 painéis com colisão (bloqueiam a visão) e espaço para 1 pessoa. */
+function wardrobe(id: string, x: number, z: number, open: Side, label: string, location?: LocationId) {
+  const W = 1.3; // largura interna
+  const D = 1.05; // profundidade interna
+  const H = 2.3;
+  const horizontalOpen = open === 'n' || open === 's';
+  const dir = open === 's' || open === 'e' ? 1 : -1;
+  if (horizontalOpen) {
+    // fundo do lado oposto à abertura
+    add({ kind: 'wardrobe', x, z: z - dir * (D / 2 + PANEL / 2), w: W + PANEL * 2, d: PANEL, h: H, collide: true, location, color: '#3a2a1c' });
+    add({ kind: 'wardrobe', x: x - W / 2 - PANEL / 2, z, w: PANEL, d: D, h: H, collide: true, location, color: '#3a2a1c' });
+    add({ kind: 'wardrobe', x: x + W / 2 + PANEL / 2, z, w: PANEL, d: D, h: H, collide: true, location, color: '#3a2a1c' });
+  } else {
+    add({ kind: 'wardrobe', x: x - dir * (D / 2 + PANEL / 2), z, w: PANEL, d: W + PANEL * 2, h: H, collide: true, location, color: '#3a2a1c' });
+    add({ kind: 'wardrobe', x, z: z - W / 2 - PANEL / 2, w: D, d: PANEL, h: H, collide: true, location, color: '#3a2a1c' });
+    add({ kind: 'wardrobe', x, z: z + W / 2 + PANEL / 2, w: D, d: PANEL, h: H, collide: true, location, color: '#3a2a1c' });
+  }
+  hideSpots.push({ id, kind: 'wardrobe', x, z, r: 0.55, open, label });
+}
+
+wardrobe('armario-casarao-1', 13.9, 50, 'w', 'Armário do casarão', 'casarao');
+wardrobe('armario-casarao-2', -4, 58.9, 'n', 'Guarda-roupa do casarão', 'casarao');
+wardrobe('armario-delegacia', -28, -2.1, 'n', 'Armário de provas', 'delegacia');
+wardrobe('despensa-taverna', 31, -4.1, 'n', 'Despensa da taverna', 'taverna');
+wardrobe('confessionario', 6, -38.6, 'w', 'Confessionário', 'igreja');
+
+/** Montes de feno e arbustos altos: sem colisão, você entra neles. */
+const softSpots: [string, HideKind, number, number, number, string][] = [
+  ['feno-1', 'haypile', 49.5, 44.5, 1.25, 'Monte de feno'],
+  ['feno-2', 'haypile', 44, 38, 1.15, 'Monte de feno'],
+  ['arbusto-floresta-1', 'bush', -50, 16, 1.2, 'Arbusto alto'],
+  ['arbusto-floresta-2', 'bush', -63, 41, 1.2, 'Arbusto alto'],
+  ['arbusto-floresta-3', 'bush', -47, 57, 1.2, 'Arbusto alto'],
+  ['arbusto-floresta-4', 'bush', -70, 24, 1.2, 'Arbusto alto'],
+  ['arbusto-cemiterio-1', 'bush', -23.5, -34.5, 1.1, 'Arbusto do cemitério'],
+  ['arbusto-cemiterio-2', 'bush', -45.5, -58.5, 1.1, 'Arbusto do cemitério'],
+  ['arbusto-praca', 'bush', 13.2, -13.4, 1.1, 'Arbusto da praça'],
+  ['arbusto-casarao', 'bush', 18, 42, 1.1, 'Arbusto do jardim'],
+];
+for (const [id, kind, x, z, r, label] of softSpots) hideSpots.push({ id, kind, x, z, r, label });
+
+export const HIDE_SPOTS: readonly HideSpot[] = hideSpots;
+
+/** Esconderijo em que o ponto está (ou null). */
+export function hideSpotAt(x: number, z: number): HideSpot | null {
+  for (const h of hideSpots) {
+    if ((x - h.x) ** 2 + (z - h.z) ** 2 <= h.r * h.r) return h;
+  }
+  return null;
+}
+
 export const MAP_BLOCKS: readonly MapBlock[] = blocks;
 
 // ---------------------------------------------------------------------------
@@ -333,3 +410,26 @@ export const ROADS: { x1: number; z1: number; x2: number; z2: number; w: number 
   { x1: -12, z1: 10, x2: -45, z2: 30, w: 3 },
   { x1: 20, z1: -8, x2: 52, z2: -36, w: 3 },
 ];
+
+/** Tipo de chão (para o som dos passos). */
+export type Surface = 'pedra' | 'grama' | 'madeira';
+
+export function surfaceAt(x: number, z: number): Surface {
+  for (const b of MAP_BLOCKS) {
+    if (b.kind === 'building' && Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2) return 'madeira';
+  }
+  if (Math.abs(x) < 15 && Math.abs(z) < 15) return 'pedra';
+  for (const r of ROADS) {
+    const dx = r.x2 - r.x1;
+    const dz = r.z2 - r.z1;
+    const l2 = dx * dx + dz * dz;
+    const t = Math.max(0, Math.min(1, ((x - r.x1) * dx + (z - r.z1) * dz) / l2));
+    if (Math.hypot(x - (r.x1 + t * dx), z - (r.z1 + t * dz)) < r.w / 2) return 'pedra';
+  }
+  return 'grama';
+}
+
+/** Chave da zona de neblina (ver CONFIG.graphics.fogZones). */
+export function fogZoneAt(x: number, z: number): string {
+  return locationAt(x, z).id ?? 'estrada';
+}

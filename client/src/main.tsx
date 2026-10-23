@@ -1,13 +1,17 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import { net } from './net/netState';
+import { net, pushFx } from './net/netState';
 import { useStore } from './net/store';
+import { currentRoom } from './net/connection';
 import { voice } from './voice/VoiceManager';
+import { applyThemeCss } from './theme';
 import './styles.css';
 
+applyThemeCss();
+
 // depuração no console do navegador (só em desenvolvimento)
-if (import.meta.env.DEV) Object.assign(window, { __nevoeiro: { net, store: useStore, voice } });
+if (import.meta.env.DEV) Object.assign(window, { __nevoeiro: { net, store: useStore, voice, pushFx, currentRoom } });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

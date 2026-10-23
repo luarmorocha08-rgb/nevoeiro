@@ -70,17 +70,87 @@ export interface MoveInput {
   dt: number;
 }
 
-/** Um passo de simulação do jogador. Idêntico no cliente e no servidor. */
-export function stepMovement(p: Vec2, input: MoveInput): Vec2 {
-  let { mx, mz } = input;
+/** Estado de movimento simulado igual no servidor e na predição do cliente. */
+export interface MoveState {
+  x: number;
+  z: number;
+  vx: number;
+  vz: number;
+  stamina: number;
+  /** stamina zerou: só corre de novo após recuperar CONFIG.move.stamina.minToRun */
+  exhausted: boolean;
+}
+
+export function initialMoveState(x: number, z: number): MoveState {
+  return { x, z, vx: 0, vz: 0, stamina: CONFIG.move.stamina.max, exhausted: false };
+}
+
+/**
+ * Um passo de simulação do jogador: aceleração/frenagem curtas, corrida com stamina
+ * e colisão. Determinística — a predição do cliente reproduz o servidor exatamente.
+ */
+export function stepMovement(s: MoveState, input: MoveInput): MoveState {
+  const M = CONFIG.move;
+  const S = M.stamina;
+  const dt = input.dt;
+  let mx = Number(input.mx) || 0;
+  let mz = Number(input.mz) || 0;
   const len = Math.hypot(mx, mz);
-  if (len < 0.01) return p;
   if (len > 1) {
     mx /= len;
     mz /= len;
   }
-  const speed = input.run ? CONFIG.move.runSpeed : CONFIG.move.walkSpeed;
-  return moveCircle(p, mx * speed * input.dt, mz * speed * input.dt);
+  const wantsMove = len > 0.05;
+  const canRun = !s.exhausted && s.stamina > 0;
+  const running = wantsMove && input.run && canRun;
+  const speed = running ? M.runSpeed : M.walkSpeed;
+  const tx = wantsMove ? mx * speed : 0;
+  const tz = wantsMove ? mz * speed : 0;
+
+  // aproxima a velocidade do alvo com aceleração limitada
+  let dvx = tx - s.vx;
+  let dvz = tz - s.vz;
+  const dv = Math.hypot(dvx, dvz);
+  const speeding = Math.hypot(tx, tz) >= Math.hypot(s.vx, s.vz);
+  const maxDv = (speeding ? M.acceleration : M.deceleration) * dt;
+  if (dv > maxDv && dv > 0) {
+    dvx = (dvx / dv) * maxDv;
+    dvz = (dvz / dv) * maxDv;
+  }
+  let vx = s.vx + dvx;
+  let vz = s.vz + dvz;
+  if (Math.hypot(vx, vz) < 0.02) {
+    vx = 0;
+    vz = 0;
+  }
+
+  let x = s.x;
+  let z = s.z;
+  if (vx !== 0 || vz !== 0) {
+    const next = moveCircle({ x, z }, vx * dt, vz * dt);
+    // bateu em algo: a velocidade acompanha o deslocamento real (desliza na parede)
+    if (dt > 0) {
+      const rvx = (next.x - x) / dt;
+      const rvz = (next.z - z) / dt;
+      if (Math.hypot(rvx - vx, rvz - vz) > 0.05) {
+        vx = rvx;
+        vz = rvz;
+      }
+    }
+    x = next.x;
+    z = next.z;
+  }
+
+  let stamina = s.stamina;
+  let exhausted = s.exhausted;
+  if (running && Math.hypot(vx, vz) > M.walkSpeed * 0.9) {
+    stamina = Math.max(0, stamina - S.drainPerSecond * dt);
+    if (stamina <= 0) exhausted = true;
+  } else {
+    stamina = Math.min(S.max, stamina + S.regenPerSecond * dt);
+    if (exhausted && stamina >= S.minToRun) exhausted = false;
+  }
+  return { x, z, vx, vz, stamina, exhausted };
 }
 
 /** true se o segmento A→B atravessa algum obstáculo alto (parede, árvore...). */

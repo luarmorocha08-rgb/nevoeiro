@@ -11,7 +11,7 @@ import type {
   ToastMsg,
   YouSnap,
 } from '@nevoeiro/shared';
-import { loadSettings, saveSettings, type Settings } from '../quality';
+import { loadAutoQuality, loadSettings, saveSettings, type Settings } from '../quality';
 
 export interface LobbyPlayerView {
   id: string;
@@ -28,6 +28,7 @@ export interface EntityView {
   ghost: boolean;
   noName: boolean;
   ally: boolean;
+  hidden: boolean;
   role?: string;
 }
 
@@ -38,6 +39,8 @@ export interface BodyView {
   x: number;
   z: number;
   y: number;
+  /** performance.now() estimado do momento da morte (animação de queda) */
+  bornAt: number;
 }
 
 export interface Toast extends ToastMsg {
@@ -105,6 +108,14 @@ interface State {
   target: TargetView | null;
   bodyTarget: TargetView | null;
   pointerLocked: boolean;
+  /** texto curto de confirmação da última ação */
+  feedback: { text: string; action: string; at: number } | null;
+  /** habilidade que acabou de sair da recarga (pisca o botão) */
+  readyFlash: { action: string; at: number } | null;
+  /** qualidade escolhida pela medição de FPS (modo automático) */
+  autoQuality: 'low' | 'medium' | 'high' | null;
+  fps: number;
+  tutorialOpen: boolean;
 }
 
 interface Actions {
@@ -155,6 +166,11 @@ export const useStore = create<State & Actions>((set, get) => ({
   target: null,
   bodyTarget: null,
   pointerLocked: false,
+  feedback: null,
+  readyFlash: null,
+  autoQuality: loadAutoQuality(),
+  fps: 0,
+  tutorialOpen: false,
 
   set: (p) => set(p),
 
@@ -211,6 +227,9 @@ export const useStore = create<State & Actions>((set, get) => ({
       mapOpen: false,
       chatOpen: false,
       chatChannel: 'local',
+      feedback: null,
+      readyFlash: null,
+      tutorialOpen: false,
     }),
 }));
 

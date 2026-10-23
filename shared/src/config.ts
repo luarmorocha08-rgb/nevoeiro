@@ -39,6 +39,13 @@ export const CONFIG = {
     interpolationDelayMs: 110,
     /** Acima desta diferença (m) o cliente "teleporta" para a posição do servidor. */
     snapDistance: 2.5,
+    /** Folga extra (m) no alcance das ações, compensando o atraso de interpolação do alvo. */
+    lagToleranceMeters: 0.9,
+    /** Salto entre dois snapshots acima disto (m) = teleporte: sem deslizar. */
+    teleportJumpMeters: 4,
+    /** Quanto tempo um jogador que saiu do alcance leva para sumir (fade). */
+    fadeOutMs: 400,
+    fadeInMs: 350,
   },
 
   move: {
@@ -46,15 +53,91 @@ export const CONFIG = {
     runSpeed: 5.8,
     radius: 0.4,
     height: 1.8,
+    /** Aceleração e frenagem (m/s²): resposta rápida, mas sem "patinar". */
+    acceleration: 24,
+    deceleration: 30,
+    stamina: {
+      max: 100,
+      /** Gasto por segundo correndo. */
+      drainPerSecond: 20,
+      /** Recuperação por segundo andando/parado. */
+      regenPerSecond: 13,
+      /** Ao zerar, só volta a correr com esta quantidade. */
+      minToRun: 25,
+    },
   },
 
   view: {
     /** Raio em que o servidor envia outros jogadores/corpos (a neblina esconde além disso). */
     interestRadius: 36,
-    fogColor: '#0b1215',
-    /** Densidade da neblina exponencial (quanto maior, menos se vê). */
-    fogDensity: 0.055,
     nameTagDistance: 11,
+    /** Abaixo desta distância da câmera o nome some (evita nome gigante colado na tela). */
+    nameTagMinDistance: 1.6,
+  },
+
+  graphics: {
+    /** Densidade base da neblina exponencial (quanto maior, menos se vê). */
+    fogDensity: 0.05,
+    /** Multiplicador da neblina por área (floresta/cemitério mais densos, praça mais leve). */
+    fogZones: {
+      praca: 0.65,
+      igreja: 0.9,
+      taverna: 0.85,
+      delegacia: 0.85,
+      casarao: 0.95,
+      celeiro: 1.0,
+      cemiterio: 1.45,
+      floresta: 1.7,
+      estrada: 1.0,
+    } as Record<string, number>,
+    /** Multiplicador da neblina com os óculos térmicos. */
+    thermalFogFactor: 0.3,
+    /** Opacidade máxima das camadas de neblina animadas. */
+    fogLayerOpacity: 0.13,
+    /** Pós-processamento. */
+    bloomIntensity: 0.75,
+    bloomThreshold: 0.72,
+    vignetteDarkness: 0.62,
+    filmGrain: 0.06,
+    /** Objetos além disto (m) não são desenhados. */
+    cullDistance: 95,
+    /** Construções além disto usam a versão simplificada (LOD). */
+    lodDistance: 55,
+    /** Qualidade automática: mede o FPS nos primeiros segundos de partida. */
+    autoQuality: {
+      sampleSeconds: 10,
+      warmupSeconds: 2,
+      /** FPS médio abaixo disto → baixa; acima de highAbove → alta; senão média. */
+      lowBelow: 30,
+      highAbove: 52,
+    },
+  },
+
+  /** Esconderijos (armários, feno, arbustos altos): ninguém vê quem está dentro, só o Rastreador. */
+  hiding: {
+    enabled: true,
+  },
+
+  /** Trilha tensa: só para inocentes. */
+  tension: {
+    /** Assassino a menos disto (m) aumenta a tensão. */
+    killerRadius: 14,
+    /** Uma morte recente deixa a trilha tensa por este tempo (s)... */
+    deathBoostSeconds: 25,
+    /** ...se tiver acontecido a até esta distância (m). */
+    deathBoostRadius: 45,
+  },
+
+  audio: {
+    /** Distância (m) entre passos andando/correndo. */
+    stepLengthWalk: 0.8,
+    stepLengthRun: 1.15,
+    /** Até onde se ouvem passos de outros jogadores. */
+    footstepRadius: 16,
+    ambientVolume: 0.5,
+    musicVolume: 0.45,
+    /** Intervalo (s) entre os sinos da igreja. */
+    churchBellEvery: 75,
   },
 
   chat: {
@@ -104,11 +187,17 @@ export const CONFIG = {
 
   bots: {
     /** Probabilidade (por segundo) de um bot assassino tentar matar se tiver alvo no alcance. */
-    killChancePerSecond: 0.35,
+    killChancePerSecond: 0.25,
     /** Bots assassinos evitam matar se houver mais alguém neste raio. */
     witnessRadius: 9,
+    /** Até onde um bot inocente enxerga um crime (com linha de visão). */
+    sightRadius: 20,
     chatChancePerSecond: 0.012,
     abilityChancePerSecond: 0.03,
+    /** Por quanto tempo (s) um bot lembra quem viu matar. */
+    suspicionSeconds: 90,
+    /** Chance (por segundo) do Xerife-bot atirar "no escuro" em alguém perto. */
+    sheriffGuessChancePerSecond: 0.004,
   },
 } as const;
 

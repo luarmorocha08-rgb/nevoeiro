@@ -21,9 +21,11 @@
     "@capacitor/core": "^7.4.0",
     "@react-three/drei": "^10.7.0",
     "@react-three/fiber": "^9.3.0",
+    "@react-three/postprocessing": "^3.2.2",
     "@react-three/rapier": "^2.1.0",
     "colyseus.js": "0.15.28",
     "livekit-client": "^2.15.0",
+    "postprocessing": "^6.39.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "three": "^0.180.0",
@@ -47,10 +49,29 @@
   "build": {
     "appId": "com.nevoeiro.game",
     "productName": "Nevoeiro",
-    "directories": { "output": "release" },
-    "files": ["dist/**/*", "electron/**/*"],
-    "win": { "target": ["nsis"] },
-    "mac": { "target": ["dmg"], "category": "public.app-category.games" },
-    "linux": { "target": ["AppImage"], "category": "Game" }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.games"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Game"
+    }
   }
 }

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { input } from '../input/InputManager';
 import { useStore } from '../net/store';
+import { Icon } from './Icons';
 
 /** Joystick virtual (esquerda) + arrastar para olhar (direita). */
 export function TouchControls() {
@@ -11,7 +12,7 @@ export function TouchControls() {
   const runToggle = useRef(false);
   const [running, setRunning] = useState(false);
   const set = useStore((s) => s.set);
-  const R = 56;
+  const R = 60;
 
   const onDown = (e: React.PointerEvent) => {
     const left = e.clientX < window.innerWidth * 0.45;
@@ -69,9 +70,9 @@ export function TouchControls() {
             setRunning(runToggle.current);
           }}
         >
-          🏃
+          <Icon name="run" size={24} />
         </button>
-        <button className="round-btn" onPointerDown={(e) => { e.stopPropagation(); set({ mapOpen: true }); }}>🗺</button>
+        <button className="round-btn" aria-label="Mapa" onPointerDown={(e) => { e.stopPropagation(); set({ mapOpen: true }); }}><Icon name="map" size={24} /></button>
       </div>
     </>
   );

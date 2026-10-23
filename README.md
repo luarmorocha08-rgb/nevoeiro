@@ -85,7 +85,8 @@ Outros comandos:
 | Comando | O que faz |
 |---|---|
 | `npm run dev:server` / `npm run dev:client` | sobe só um dos lados |
-| `npm test` | testes das regras (sorteio, xerife, zumbi, anjo, detetive, fantasma, partidas completas com bots) |
+| `npm test` | testes das regras (sorteio, xerife, zumbi, anjo, detetive, fantasma, esconderijos, stamina, partidas completas com bots) |
+| `npm run balance -w server` | simula partidas só com bots e mostra duração média e vitórias por time |
 | `npm run typecheck` | checagem de tipos dos 3 pacotes |
 | `npm run build` | build de produção (servidor em `server/dist`, cliente em `client/dist`) |
 
@@ -100,6 +101,8 @@ Variáveis de ambiente: copie `server/.env.example` → `server/.env` e `client/
 - **Criar sala**: gera um código de 5 letras. Envie aos amigos; eles usam **Entrar**.
 - No lobby: nome, skin (só visual), **teste de microfone**, e o **anfitrião** inicia.
 - Partidas de **10 a 16** jogadores. O anfitrião pode adicionar/remover **bots** (+/−, "Completar 10").
+- **Jogar offline contra bots (sem servidor)**: roda as mesmas regras do servidor dentro do navegador —
+  funciona até no site publicado sem servidor de jogo.
 - **Modo de teste (com bots)**: na tela inicial. Você inicia sozinho e o servidor completa com bots
   até 10. Bots andam pelo mapa (A*), conversam no chat e usam habilidades — assassinos-bot matam
   quando ninguém está olhando, o Detetive-bot examina corpos, o Anjo-bot ressuscita, etc.
@@ -115,7 +118,7 @@ Variáveis de ambiente: copie `server/.env.example` → `server/.env` e `client/
 |---|---|---|---|
 | Andar | WASD / setas | joystick virtual (lado esquerdo) | analógico esquerdo |
 | Câmera | mouse (clique na tela trava o cursor; Esc solta) · botão direito arrasta | arrastar no lado direito | analógico direito |
-| Correr | Shift (Caps Lock alterna) | botão 🏃 (ou joystick no máximo) | RT / L3 |
+| Correr (gasta stamina) | Shift (Caps Lock alterna) | botão de corrida (ou joystick no máximo) | RT / L3 |
 | Habilidade 1 / 2 | Q / E | botões redondos | A / B |
 | Chat | Enter (ou T) | botão 💬 | Select |
 | Mapa | M | minimapa / 🗺 | Y |
@@ -125,11 +128,69 @@ Variáveis de ambiente: copie `server/.env.example` → `server/.env` e `client/
 | Espectador | WASD voa · Espaço/C sobe e desce | joystick | analógicos + direcional |
 
 O alvo das habilidades é escolhido automaticamente: o jogador (ou corpo) mais próximo **na direção
-da câmera** dentro do alcance — ele fica com um anel vermelho (jogador) ou ciano (corpo) e o nome
-aparece sobre o botão.
+da câmera** dentro do alcance — ele ganha **contorno** e um anel no chão na cor do seu papel
+(corpos: verde‑água) e o nome aparece sobre o botão.
 
-Qualidade gráfica (baixa/média/alta/automática), sensibilidade, volume e servidor ficam em
-**Configurações**. A opção automática analisa núcleos, memória, tela de toque e GPU.
+**Movimento:** aceleração e frenagem curtas, corrida com **stamina** (barra sob as habilidades; ao
+zerar você só volta a correr depois de recuperar um pouco). A câmera em terceira pessoa não atravessa
+paredes e é suavizada.
+
+**Esconderijos:** armários (Casarão, Delegacia, Taverna, confessionário da Igreja), montes de feno no
+Celeiro e arbustos altos (floresta, cemitério, praça, jardim). Quem está dentro não é visto nem pode ser
+alvo — exceto por parceiros assassinos, por quem está no mesmo esconderijo e pelo **Rastreador com os
+óculos de calor**. A voz continua saindo do lugar (sem mostrar quem fala).
+
+**Feedback:** toda ação confirmada pelo servidor tem som, vibração no celular e um texto curto; erros
+têm som e vibração dupla; quando uma habilidade sai da recarga, o botão pulsa e toca um aviso.
+
+**Tutorial:** na primeira partida aparecem 4 cartões curtos (controles, sua habilidade, chat e
+esconderijos). Para ver de novo, apague `nevoeiro.tutorial.v1` do armazenamento do navegador.
+
+Em **Configurações**: qualidade gráfica (baixa/média/alta/automática), sensibilidade, volumes (geral,
+trilha e ambiente), inverter eixo, **modo para daltônicos**, vibração, **mostrar FPS** e servidor.
+
+## Gráficos, som e desempenho
+
+| | Baixa | Média | Alta |
+|---|---|---|---|
+| Resolução (DPR) | 0,6–0,9 | 0,9–1,25 | 1–2 |
+| Sombras (só a lua) | — | PCF 1024 | suaves 2048 |
+| Pós‑processamento | só o filtro térmico quando ativo | bloom, vinheta, grão de filme, ACES | + SSAO (N8AO) e SMAA |
+| Camadas de neblina animada | — | 2 | 3 |
+| Vagalumes / poeira / folhas | 10 / — / — | 30 / 60 / 40 | 60 / 140 / 90 |
+| Fumaça das chaminés / estrelas | — | sim | sim |
+| Luzes quentes pontuais | 3 | 5 | 8 |
+
+- **Automática de verdade:** começa pela heurística do aparelho, **mede o FPS nos primeiros 10 s** de
+  partida (após 2 s de aquecimento) e sobe/desce um nível (limiares em `CONFIG.graphics.autoQuality`).
+  O resultado fica salvo para as próximas partidas.
+- **Neblina por área:** `FogExp2` com densidade que muda suavemente por local (`CONFIG.graphics.fogZones`:
+  floresta e cemitério mais densos, praça mais leve) + camadas animadas na cor `#8A97B0`.
+- **Iluminação:** luar frio direcional (`#A9C4FF`) com sombras; lampiões e janelas quentes (`#F2A65A`)
+  com chama tremulando; um número fixo de luzes pontuais é redistribuído para os lampiões mais próximos
+  (sem recompilar shaders).
+- **Desempenho:** árvores com instancing em blocos (culling por câmera e por distância), construções
+  com LOD (versão simples a partir de `CONFIG.graphics.lodDistance`), partículas e efeitos em pool fixo
+  (nada criado por evento), tudo descartado com `dispose` ao desmontar.
+- **Efeitos por habilidade:** ondulação roxa (Metamorfo), dissolve por shader ao sumir/voltar
+  (Fantasma), implosão/explosão de partículas (Teleportador), névoa verde visível só para o Zumbi e os
+  parceiros, clarão + rastro da bala (Xerife), lupa brilhando e algemas animadas (Detetive), feixe
+  dourado com partículas subindo (Anjo) e filtro térmico em tela cheia azul→vermelho (Rastreador).
+- **Áudio 3D:** passos com timbre por chão (pedra, grama, madeira), vento, corujas na floresta, grilos,
+  sinos da igreja e uma trilha em drone que fica mais tensa (com batimentos) quando há um assassino
+  perto ou uma morte recente — **só para inocentes**; o servidor calcula a tensão.
+- **Cores:** paleta em `client/src/theme.ts` (publicada como variáveis CSS e usada na cena). A cor do
+  time de assassinos só aparece para os próprios assassinos. Textos passam no contraste WCAG AA.
+
+## Balanceamento
+
+O servidor imprime, ao fim de cada partida, o tempo médio e a taxa de vitória de cada time (total e
+"contra bots"). Para simular várias partidas só com bots e ajustar os números de `shared/src/config.ts`:
+
+```bash
+npm run balance -w server            # 12 partidas por tamanho de sala (10 a 16)
+npm run balance -w server -- 30      # 30 por tamanho
+```
 
 ---
 

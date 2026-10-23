@@ -15,9 +15,11 @@ import {
   type RoleMsg,
   type SnapshotMsg,
   type ToastMsg,
+  type AckMsg,
   type VoiceTokenMsg,
 } from '@nevoeiro/shared';
 import { sfx } from '../audio/sfx';
+import { onActionAck } from '../game/feedback';
 import { voice } from '../voice/VoiceManager';
 import { applySnapshot, net, pushFx, resetNet } from './netState';
 import { getState, type LobbyPlayerView } from './store';
@@ -132,7 +134,8 @@ function attach(r: Room) {
   leaving = false;
   saveToken(r);
   const st = getState();
-  st.set({ conn: 'online', sessionId: r.sessionId, code: r.roomId, screen: 'lobby' });
+  // a tela (lobby/jogo) é decidida pelo estado da sala — assim reconectar não remonta a cena 3D
+  st.set({ conn: 'online', sessionId: r.sessionId, code: r.roomId });
 
   r.onStateChange((state: any) => {
     const players: LobbyPlayerView[] = [];
@@ -207,6 +210,9 @@ export function handleServerMessage(type: string, m: any) {
       getState().pushChat(m as ChatMsg);
       sfx.play('chat');
       break;
+    case S2C.ack:
+      onActionAck(m as AckMsg);
+      break;
     case S2C.toast:
       getState().pushToast(m as ToastMsg);
       break;
@@ -216,10 +222,15 @@ export function handleServerMessage(type: string, m: any) {
     case S2C.fx: {
       const f = m as FxMsg;
       pushFx(f);
-      const d = Math.hypot(f.x - net.local.x, f.z - net.local.z);
-      if (f.kind === 'shot') sfx.play('shot', Math.max(0.15, 1 - d / 70));
-      else if (d < 30 && f.kind.startsWith('teleport')) sfx.play('teleport', 1 - d / 30);
-      else if (d < 20 && f.kind === 'kill') sfx.play('kill', 1 - d / 20);
+      // som 3D: volume e lado conforme a posição do evento
+      const pos = { x: f.x, z: f.z };
+      if (f.kind === 'shot') sfx.play('shot', 1, pos);
+      else if (f.kind.startsWith('teleport')) sfx.play('teleport', 0.8, pos);
+      else if (f.kind === 'kill') sfx.play('kill', 0.8, pos);
+      else if (f.kind === 'vanish' || f.kind === 'appear') sfx.play('vanish', 0.6, pos);
+      else if (f.kind === 'morph') sfx.play('morph', 0.6, pos);
+      else if (f.kind === 'cuff') sfx.play('cuff', 0.8, pos);
+      else if (f.kind === 'zombie') sfx.play('vanish', 0.8, pos);
       break;
     }
     case S2C.voice:
@@ -232,19 +243,39 @@ export function handleServerMessage(type: string, m: any) {
   }
 }
 
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const h = setTimeout(() => reject(new Error('tempo esgotado')), ms);
+    p.then(
+      (v) => {
+        clearTimeout(h);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(h);
+        reject(e);
+      },
+    );
+  });
+}
+
 async function reconnectLoop(token: string) {
   const st = getState();
   st.set({ conn: 'reconnecting' });
   voice.pause();
   const deadline = Date.now() + 45_000;
+  let attempt = 0;
   while (Date.now() < deadline) {
+    attempt++;
     try {
-      const r = await getClient().reconnect(token);
+      // cada tentativa tem tempo limite: sem rede, a conexão pode ficar pendurada para sempre
+      const r = await withTimeout(getClient().reconnect(token), 6000);
       attach(r);
       r.send(C2S.sync);
       getState().pushToast({ text: 'Reconectado!', level: 'success' });
       return;
-    } catch {
+    } catch (err) {
+      console.warn(`[reconexão] tentativa ${attempt} falhou:`, err instanceof Error ? err.message : err);
       await new Promise((res) => setTimeout(res, 2000));
     }
   }

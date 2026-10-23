@@ -14,6 +14,11 @@ export interface Settings {
   name: string;
   skin: string;
   masterVolume: number;
+  musicVolume: number;
+  ambientVolume: number;
+  vibration: boolean;
+  /** modo para daltônicos: formas e rótulos além da cor */
+  colorblind: boolean;
 }
 
 const KEY = 'nevoeiro.settings.v1';
@@ -28,6 +33,10 @@ const DEFAULTS: Settings = {
   name: '',
   skin: '',
   masterVolume: 0.9,
+  musicVolume: 0.6,
+  ambientVolume: 0.7,
+  vibration: true,
+  colorblind: false,
 };
 
 export function loadSettings(): Settings {
@@ -78,24 +87,57 @@ export function detectQuality(): QualityLevel {
   return detected;
 }
 
-export function resolveQuality(s: QualitySetting): QualityLevel {
-  return s === 'auto' ? detectQuality() : s;
+const AUTO_KEY = 'nevoeiro.autoQuality.v1';
+
+/** Resultado da medição de FPS da última vez (modo automático). */
+export function loadAutoQuality(): QualityLevel | null {
+  try {
+    const v = localStorage.getItem(AUTO_KEY);
+    return v === 'low' || v === 'medium' || v === 'high' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveAutoQuality(q: QualityLevel) {
+  try {
+    localStorage.setItem(AUTO_KEY, q);
+  } catch {
+    /* ok */
+  }
+}
+
+/** Automática: usa o FPS medido (se houver), senão a heurística do aparelho. */
+export function resolveQuality(s: QualitySetting, measured?: QualityLevel | null): QualityLevel {
+  if (s !== 'auto') return s;
+  return measured ?? detectQuality();
 }
 
 export interface QualityProfile {
   dpr: [number, number];
   shadows: boolean;
+  softShadows: boolean;
   shadowMapSize: number;
   antialias: boolean;
-  fogParticles: number;
-  lampLights: number;
+  /** pós-processamento: 0 nenhum, 1 bloom+vinheta+grão, 2 + oclusão de ambiente (SSAO) */
+  post: 0 | 1 | 2;
+  fogLayers: number;
+  dust: number;
+  fireflies: number;
+  leaves: number;
+  smoke: boolean;
+  /** luzes pontuais quentes ativas (redistribuídas para os lampiões mais próximos) */
+  pointLights: number;
   treeDetail: number;
+  particles: number;
+  /** céu com estrelas */
+  stars: boolean;
 }
 
 export const QUALITY_PROFILES: Record<QualityLevel, QualityProfile> = {
-  low: { dpr: [0.6, 1], shadows: false, shadowMapSize: 512, antialias: false, fogParticles: 24, lampLights: 3, treeDetail: 5 },
-  medium: { dpr: [1, 1.5], shadows: true, shadowMapSize: 1024, antialias: true, fogParticles: 60, lampLights: 6, treeDetail: 7 },
-  high: { dpr: [1, 2], shadows: true, shadowMapSize: 2048, antialias: true, fogParticles: 120, lampLights: 12, treeDetail: 9 },
+  low: { dpr: [0.6, 0.9], shadows: false, softShadows: false, shadowMapSize: 512, antialias: false, post: 0, fogLayers: 0, dust: 0, fireflies: 10, leaves: 0, smoke: false, pointLights: 3, treeDetail: 5, particles: 160, stars: false },
+  medium: { dpr: [0.9, 1.25], shadows: true, softShadows: false, shadowMapSize: 1024, antialias: false, post: 1, fogLayers: 2, dust: 60, fireflies: 30, leaves: 40, smoke: true, pointLights: 5, treeDetail: 6, particles: 350, stars: true },
+  high: { dpr: [1, 2], shadows: true, softShadows: true, shadowMapSize: 2048, antialias: false, post: 2, fogLayers: 3, dust: 140, fireflies: 60, leaves: 90, smoke: true, pointLights: 8, treeDetail: 8, particles: 700, stars: true },
 };
 
 export const QUALITY_LABEL: Record<QualitySetting, string> = {

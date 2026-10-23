@@ -11,6 +11,9 @@ import {
   resolveCircle,
   stepMovement,
   WORLD,
+  hideSpotAt,
+  type AckMsg,
+  type HideSpot,
   type ActionMsg,
   type AlertMsg,
   type BodySnap,
@@ -32,6 +35,7 @@ import { Zumbi } from '../roles/Zumbi';
 import { BotBrain } from './Bots';
 import { EventLog } from './EventLog';
 import { assignRoles } from './RoleAssigner';
+import { logSummary, recordMatch } from './Stats';
 import { fail, ok, type ActionResult, type Body, type KillInfo, type ServerPlayer } from './types';
 
 /** Como a partida fala com o mundo (implementado pela GameRoom; nos testes, por um mock). */
@@ -55,6 +59,8 @@ export interface MatchOptions {
   clock?: () => number;
   rnd?: () => number;
   revealSeconds?: number;
+  /** não imprimir o resumo de balanço (simulações em lote) */
+  quietStats?: boolean;
 }
 
 let netCounter = 0;
@@ -62,6 +68,18 @@ function makeNetId(): string {
   netCounter = (netCounter + 1) % 1e6;
   return Math.random().toString(36).slice(2, 7) + netCounter.toString(36);
 }
+
+const ACK_TEXT: Record<string, string> = {
+  kill: 'Vítima abatida.',
+  morph: 'Aparência copiada.',
+  invisible: 'Você sumiu na névoa.',
+  teleport: 'Teleporte concluído.',
+  shoot: 'Disparo!',
+  examine: 'Corpo examinado.',
+  cuff: 'Algemas fechadas.',
+  revive: 'Vida devolvida.',
+  thermal: 'Óculos térmicos ligados.',
+};
 
 const DISPLAY_ANON = 'Voz no nevoeiro';
 const DISPLAY_UNKNOWN = 'Desconhecido';
@@ -80,9 +98,11 @@ export class Match {
   private readonly clock: () => number;
   private readonly rnd: () => number;
   private bodySeq = 0;
+  private recentDeaths: { x: number; z: number; at: number }[] = [];
   private chatSeq = 0;
   private timeline: { t: number; text: string }[] = [];
   private endMsg: EndMsg | null = null;
+  private readonly quietStats: boolean;
 
   constructor(
     private readonly io: MatchIO,
@@ -91,6 +111,7 @@ export class Match {
     opts: MatchOptions = {},
   ) {
     this.clock = opts.clock ?? Date.now;
+    this.quietStats = !!opts.quietStats;
     this.rnd = opts.rnd ?? Math.random;
     const now = this.clock();
     this.startedAt = now;
@@ -110,6 +131,10 @@ export class Match {
         connected: !part.isBot,
         x: sx,
         z: sz,
+        vx: 0,
+        vz: 0,
+        stamina: CONFIG.move.stamina.max,
+        exhausted: false,
         yaw: Math.atan2(-sx, -sz),
         moving: 0,
         alive: true,
@@ -167,12 +192,26 @@ export class Match {
     return !p.alive;
   }
 
-  /** Validação de alcance para ações com alvo (matar, atirar, algemar, copiar). */
+  /** Esconderijo em que o jogador está (só vivos). */
+  hiddenSpot(p: ServerPlayer): HideSpot | null {
+    if (!CONFIG.hiding.enabled || !p.alive) return null;
+    return hideSpotAt(p.x, p.z);
+  }
+
+  /** O alvo escondido pode ser visto por quem? Parceiros e quem está no mesmo esconderijo. */
+  private seesHidden(viewer: ServerPlayer, target: ServerPlayer, spot: HideSpot): boolean {
+    if (viewer.role.isKiller && target.role.isKiller) return true;
+    return this.hiddenSpot(viewer)?.id === spot.id;
+  }
+
+  /** Validação de alcance para ações com alvo (matar, atirar, algemar, copiar). Só no servidor. */
   checkReach(a: ServerPlayer, b: ServerPlayer, range: number, now: number): string | null {
     if (!b.alive) return 'Alvo inválido.';
     if (b.role.isInvisible(now) && !a.role.isKiller) return 'Você não vê ninguém ali.';
+    const spot = this.hiddenSpot(b);
+    if (spot && !this.seesHidden(a, b, spot)) return 'Você não vê ninguém ali.';
     const d = Math.hypot(a.x - b.x, a.z - b.z);
-    if (d > range + 0.35) return 'Longe demais.';
+    if (d > range + CONFIG.net.lagToleranceMeters) return 'Longe demais.';
     if (lineBlocked(a, b)) return 'Sem linha de visão.';
     return null;
   }
@@ -210,20 +249,31 @@ export class Match {
 
     if (!p.alive || this.phase !== 'playing' || p.frozenUntil > now) {
       p.moving = 0;
+      p.vx = 0;
+      p.vz = 0;
       return;
     }
     const mx = Number(msg.mx) || 0;
     const mz = Number(msg.mz) || 0;
     const run = !!msg.run;
+    this.integrate(p, mx, mz, run, dt, now);
+  }
+
+  /** Aplica um passo de movimento (humanos e bots usam o mesmo caminho). */
+  integrate(p: ServerPlayer, mx: number, mz: number, run: boolean, dt: number, now: number): void {
     const next = stepMovement(p, { mx, mz, run, dt });
-    const moved = Math.hypot(next.x - p.x, next.z - p.z) > 1e-4;
     p.x = next.x;
     p.z = next.z;
-    if (Math.hypot(mx, mz) > 0.05) {
-      p.yaw = Math.atan2(mx, mz);
-      p.moving = run ? 2 : 1;
+    p.vx = next.vx;
+    p.vz = next.vz;
+    p.stamina = next.stamina;
+    p.exhausted = next.exhausted;
+    const speed = Math.hypot(p.vx, p.vz);
+    if (Math.hypot(mx, mz) > 0.05) p.yaw = Math.atan2(mx, mz);
+    if (speed > 0.15) {
+      p.moving = speed > CONFIG.move.walkSpeed + 0.3 ? 2 : 1;
       p.lastMoveAt = now;
-    } else if (!moved) {
+    } else {
       p.moving = 0;
     }
   }
@@ -231,7 +281,9 @@ export class Match {
   handleAction(p: ServerPlayer, msg: ActionMsg): void {
     if (this.phase !== 'playing') return;
     const res = p.role.tryAction(msg, this.now());
-    if (!res.ok && !p.isBot) this.toast(p, res.error, 'error');
+    if (p.isBot) return;
+    if (!res.ok) this.toast(p, res.error, 'error');
+    else this.io.send(p, S2C.ack, { action: msg.type, text: ACK_TEXT[msg.type] ?? 'Feito.' } satisfies AckMsg);
   }
 
   chat(p: ServerPlayer, raw: string, channel: ChatChannel): void {
@@ -285,7 +337,19 @@ export class Match {
     victim.alive = false;
     victim.diedAt = now;
     victim.frozenUntil = 0;
-    victim.moving = 0;
+    this.stop(victim);
+    this.recentDeaths.push({ x: victim.x, z: victim.z, at: now });
+    // bots que viram o crime passam a suspeitar do assassino
+    if (info.killer && info.cause === 'kill') {
+      for (const o of this.players.values()) {
+        if (!o.bot || !o.alive || o === info.killer || o.role.isKiller) continue;
+        const d = Math.hypot(o.x - info.killer.x, o.z - info.killer.z);
+        if (d <= CONFIG.bots.sightRadius && !lineBlocked(o, info.killer) && !info.killer.role.isInvisible(now)) {
+          o.bot.suspect(info.killer.netId, now);
+          o.bot.shareSuspicion(o, info.killer, this, now);
+        }
+      }
+    }
 
     const loc = locationAt(victim.x, victim.z);
     const body: Body = {
@@ -331,7 +395,7 @@ export class Match {
     target.alive = false;
     target.arrested = true;
     target.diedAt = now;
-    target.moving = 0;
+    this.stop(target);
     const loc = locationAt(target.x, target.z);
     this.alert({ kind: 'arrest', text: `${target.name} foi preso e saiu da partida`, x: target.x, z: target.z, location: loc.name, at: now });
     this.log.add('arrest', { actor: by, target, location: loc.name }, now);
@@ -344,7 +408,7 @@ export class Match {
 
   immobilize(target: ServerPlayer, seconds: number): void {
     target.frozenUntil = this.now() + seconds * 1000;
-    target.moving = 0;
+    this.stop(target);
   }
 
   revive(body: Body, angel: ServerPlayer): ActionResult {
@@ -356,6 +420,7 @@ export class Match {
     const now = this.now();
     victim.alive = true;
     victim.frozenUntil = 0;
+    this.stop(victim);
     victim.x = body.x;
     victim.z = body.z;
     const pos = resolveCircle(victim, CONFIG.move.radius);
@@ -383,6 +448,7 @@ export class Match {
     const from = { x: round(p.x), z: round(p.z) };
     p.x = pos.x;
     p.z = pos.z;
+    this.stop(p);
     this.fx({ kind: 'teleport-in', x: p.x, z: p.z });
     this.log.add('teleport', { actor: p, from, to: { x: round(p.x), z: round(p.z) } });
     return ok();
@@ -396,6 +462,11 @@ export class Match {
     p.z = pos.z;
     p.alive = true;
     p.frozenUntil = 0;
+    this.stop(p);
+    // névoa verde do retorno: só ele e os parceiros veem
+    for (const o of this.players.values()) {
+      if (o.role.isKiller) this.io.send(o, S2C.fx, { kind: 'zombie', x: p.x, z: p.z, id: p.netId } satisfies FxMsg);
+    }
     this.log.add('zombie_return', { actor: p, x: round(p.x), z: round(p.z) });
     this.note(`${p.name} (Zumbi) voltou da cova em segredo`);
     this.toast(p, 'Você voltou da cova. Para os outros, continua morto. Só tem forças para matar UMA vez.', 'warn');
@@ -410,6 +481,15 @@ export class Match {
       location: body.location,
     };
     this.io.send(p, S2C.examine, msg);
+    // brilho da lupa: só o Detetive vê
+    this.io.send(p, S2C.fx, { kind: 'examine', x: body.x, z: body.z } satisfies FxMsg);
+  }
+
+  /** Para o jogador na hora (morte, prisão, algema, teleporte). */
+  stop(p: ServerPlayer): void {
+    p.vx = 0;
+    p.vz = 0;
+    p.moving = 0;
   }
 
   // ------------------------------------------------------------------ saída
@@ -468,10 +548,13 @@ export class Match {
       if (thermal) th.push({ id: p.netId, x: round(p.x), z: round(p.z) });
       const invisible = p.role.isInvisible(now);
       const ally = viewer.role.isKiller && p.role.isKiller;
+      const spot = this.hiddenSpot(p);
       let visible = spectator || d <= R;
       if (visible && invisible && !spectator && !ally) visible = false;
+      if (visible && spot && !spectator && !this.seesHidden(viewer, p, spot)) visible = false;
       if (!visible) {
-        if (invisible && d <= VR && !spectator) a.push({ id: p.netId, x: round(p.x), z: round(p.z) });
+        // a voz continua saindo do lugar certo, sem mostrar quem é
+        if ((invisible || spot) && d <= VR && !spectator) a.push({ id: p.netId, x: round(p.x), z: round(p.z) });
         continue;
       }
       const look = p.role.disguise(now);
@@ -480,6 +563,7 @@ export class Match {
       if (look?.hideName && !ally && !spectator) f |= EF.NONAME;
       if (p.frozenUntil > now) f |= EF.FROZEN;
       if (ally) f |= EF.ALLY;
+      if (spot) f |= EF.HIDDEN;
       const ent: EntitySnap = {
         id: p.netId,
         n: look && !look.hideName ? look.name : p.name,
@@ -496,7 +580,7 @@ export class Match {
     const b: BodySnap[] = [];
     for (const body of this.bodies.values()) {
       if (!spectator && Math.hypot(body.x - viewer.x, body.z - viewer.z) > R) continue;
-      b.push({ id: body.id, n: body.victimName, s: body.skin, x: round(body.x), z: round(body.z), y: round(body.yaw) });
+      b.push({ id: body.id, n: body.victimName, s: body.skin, x: round(body.x), z: round(body.z), y: round(body.yaw), a: now - body.diedAt });
     }
 
     const innocents = all.filter((p) => !p.role.isKiller);
@@ -508,6 +592,12 @@ export class Match {
       you: {
         x: viewer.x,
         z: viewer.z,
+        vx: viewer.vx,
+        vz: viewer.vz,
+        stamina: viewer.stamina,
+        exhausted: viewer.exhausted,
+        hidden: this.hiddenSpot(viewer)?.label ?? null,
+        tension: this.tensionFor(viewer, now),
         ack: viewer.lastSeq,
         alive: viewer.alive,
         spectator,
@@ -532,6 +622,25 @@ export class Match {
         killers: this.killersCount,
       },
     };
+  }
+
+  /** Tensão da trilha (só inocentes vivos): assassino perto ou morte recente por perto. */
+  private tensionFor(viewer: ServerPlayer, now: number): number {
+    if (!viewer.alive || viewer.role.isKiller) return 0;
+    const T = CONFIG.tension;
+    let t = 0;
+    for (const p of this.players.values()) {
+      if (!p.alive || !p.role.isKiller) continue;
+      const d = Math.hypot(p.x - viewer.x, p.z - viewer.z);
+      if (d < T.killerRadius) t = Math.max(t, 1 - d / T.killerRadius);
+    }
+    const limit = now - T.deathBoostSeconds * 1000;
+    this.recentDeaths = this.recentDeaths.filter((r) => r.at >= limit);
+    for (const r of this.recentDeaths) {
+      if (Math.hypot(r.x - viewer.x, r.z - viewer.z) > T.deathBoostRadius) continue;
+      t = Math.max(t, 0.6 * (1 - (now - r.at) / (T.deathBoostSeconds * 1000)));
+    }
+    return Math.round(t * 100) / 100;
   }
 
   // ------------------------------------------------------------------ vitória
@@ -574,6 +683,14 @@ export class Match {
       })),
     };
     this.log.add('match_end', { winner, reason }, now);
+    const list = [...this.players.values()];
+    recordMatch({
+      winner,
+      durationSec: this.endMsg.durationSec,
+      players: list.length,
+      humans: list.filter((p) => p.sessionId !== null || !p.isBot).length,
+    });
+    if (!this.quietStats) logSummary();
     this.io.onPhase('ended');
     this.io.onEnd(this.endMsg);
   }

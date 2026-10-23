@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { triggerAbility } from '../game/abilities';
+import { resetCooldownWatch } from '../game/feedback';
 import { GameCanvas } from '../game/GameCanvas';
 import { input, setKeyBlocker } from '../input/InputManager';
 import { getState, useStore } from '../net/store';
@@ -17,6 +18,7 @@ export function GameScreen() {
 
   useEffect(() => {
     input.start();
+    resetCooldownWatch();
     setKeyBlocker(() => getState().chatOpen);
     const onLock = () => getState().set({ pointerLocked: !!document.pointerLockElement });
     document.addEventListener('pointerlockchange', onLock);

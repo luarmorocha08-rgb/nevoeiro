@@ -21,7 +21,7 @@ export class Metamorfo extends KillerRole {
     this.copied = { name: look.name, skin: look.skin };
     this.setActive('morph', C.duration, now);
     this.setCooldown('morph', C.cooldown, now);
-    this.match.fx({ kind: 'morph', x: this.player.x, z: this.player.z });
+    this.match.fx({ kind: 'morph', x: this.player.x, z: this.player.z, id: this.player.netId });
     this.match.logEvent('morph', { actor: this.player, target });
     this.match.toast(this.player, `Você agora é ${look.name}.`, 'success');
     return ok();

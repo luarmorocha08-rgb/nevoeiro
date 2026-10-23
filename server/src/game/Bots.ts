@@ -2,7 +2,6 @@ import {
   CONFIG,
   findPath,
   randomFreePoint,
-  stepMovement,
   type ActionType,
   type Vec2,
 } from '@nevoeiro/shared';
@@ -37,6 +36,23 @@ export class BotBrain {
   private stuckFor = 0;
   private running = false;
   private examined = new Set<string>();
+  /** assassinos que este bot viu matar (netId → quando) */
+  private suspects = new Map<string, number>();
+
+  suspect(netId: string, now: number) {
+    this.suspects.set(netId, now);
+  }
+
+  /** Como um humano faria: avisa no chat e quem está perto passa a desconfiar. */
+  shareSuspicion(self: ServerPlayer, suspect: ServerPlayer, m: Match, now: number) {
+    const look = suspect.role.disguise(now);
+    const name = look && !look.hideName ? look.name : look?.hideName ? 'alguém sem rosto' : suspect.name;
+    m.chat(self, `Vi ${name} matar alguém!`, 'local');
+    for (const o of m.players.values()) {
+      if (!o.bot || !o.alive || o === suspect || o.role.isKiller) continue;
+      if (Math.hypot(o.x - self.x, o.z - self.z) <= CONFIG.chat.textRadius) o.bot.suspect(suspect.netId, now);
+    }
+  }
 
   constructor(private readonly rnd: () => number) {}
 
@@ -50,7 +66,7 @@ export class BotBrain {
       return;
     }
     this.think(p, m, dt, now);
-    this.move(p, dt, now);
+    this.move(p, m, dt, now);
   }
 
   private think(p: ServerPlayer, m: Match, dt: number, now: number) {
@@ -72,9 +88,8 @@ export class BotBrain {
         if (victims.length) {
           const v = victims[0];
           const witnesses = near(CONFIG.bots.witnessRadius).filter((o) => o !== v && !o.role.isKiller);
-          if (witnesses.length === 0 && chance(CONFIG.bots.killChancePerSecond * 3)) {
-            tryAct('kill', { targetId: v.netId });
-          } else if (chance(CONFIG.bots.killChancePerSecond * 0.25)) {
+          // bot assassino só mata quando ninguém está olhando
+          if (witnesses.length === 0 && chance(CONFIG.bots.killChancePerSecond)) {
             tryAct('kill', { targetId: v.netId });
           }
         } else if (now > this.repathAt - 3000) {
@@ -93,6 +108,45 @@ export class BotBrain {
         this.path = [];
       }
       return;
+    }
+
+    // dedução: quem estava colado num corpo fresco vira suspeito (pode ser inocente!)
+    for (const b of m.bodies.values()) {
+      if (now - b.diedAt > 8000 || Math.hypot(b.x - p.x, b.z - p.z) > 14) continue;
+      for (const o of others) {
+        if (Math.hypot(o.x - b.x, o.z - b.z) < 3 && !m.hiddenSpot(o) && !o.role.isInvisible(now)) this.suspect(o.netId, now);
+      }
+    }
+
+    // reação de inocentes a um assassino que viram matar
+    const seen = [...this.suspects.entries()]
+      .filter(([, at]) => now - at < CONFIG.bots.suspicionSeconds * 1000)
+      .map(([id]) => m.getPlayer(id))
+      .filter((o): o is ServerPlayer => !!o && o.alive);
+    const threat = seen.sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+    if (threat) {
+      const d = Math.hypot(threat.x - p.x, threat.z - p.z);
+      if (role.id === 'xerife' && role.cooldownLeft('shoot', now) === 0) {
+        if (d <= CONFIG.roles.xerife.range) tryAct('shoot', { targetId: threat.netId });
+        else if (now > this.repathAt - 4000) this.goTo(p, threat, now, 2000);
+        return;
+      }
+      if (role.id === 'detetive' && role.cooldownLeft('cuff', now) === 0) {
+        if (d <= CONFIG.roles.detetive.cuffRange) tryAct('cuff', { targetId: threat.netId });
+        else if (now > this.repathAt - 4000) this.goTo(p, threat, now, 2000);
+        return;
+      }
+      // os demais fogem para longe do assassino
+      if (d < 16 && now > this.repathAt - 6000) {
+        const away = { x: p.x + ((p.x - threat.x) / (d || 1)) * 20, z: p.z + ((p.z - threat.z) / (d || 1)) * 20 };
+        this.goTo(p, away, now, 4000);
+        this.running = true;
+      }
+    }
+    // erro humano: o Xerife às vezes atira em alguém "suspeito" sem ter visto nada
+    if (role.id === 'xerife' && role.cooldownLeft('shoot', now) === 0 && chance(CONFIG.bots.sheriffGuessChancePerSecond)) {
+      const t = near(CONFIG.roles.xerife.range)[0];
+      if (t) tryAct('shoot', { targetId: t.netId });
     }
 
     if (role.id === 'rastreador' && chance(CONFIG.bots.abilityChancePerSecond)) tryAct('thermal');
@@ -117,11 +171,11 @@ export class BotBrain {
     this.running = this.rnd() < 0.25;
   }
 
-  private move(p: ServerPlayer, dt: number, now: number) {
+  private move(p: ServerPlayer, m: Match, dt: number, now: number) {
     if (!this.path.length || now > this.repathAt) {
       // às vezes fica parado um pouco, como gente de verdade
       if (this.rnd() < 0.3 * dt) {
-        p.moving = 0;
+        m.stop(p);
         return;
       }
       this.goTo(p, randomFreePoint(this.rnd), now, 12000 + this.rnd() * 10000);
@@ -136,12 +190,7 @@ export class BotBrain {
       return;
     }
     const before = { x: p.x, z: p.z };
-    const next = stepMovement(p, { mx: dx / d, mz: dz / d, run: this.running, dt });
-    p.x = next.x;
-    p.z = next.z;
-    p.yaw = Math.atan2(dx, dz);
-    p.moving = this.running ? 2 : 1;
-    p.lastMoveAt = now;
+    m.integrate(p, dx / d, dz / d, this.running, dt, now);
     if (Math.hypot(p.x - before.x, p.z - before.z) < 0.2 * dt) {
       this.stuckFor += dt;
       if (this.stuckFor > 1.5) {

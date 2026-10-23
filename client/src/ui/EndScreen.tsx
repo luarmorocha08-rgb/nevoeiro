@@ -2,6 +2,8 @@ import { ROLE_INFO } from '@nevoeiro/shared';
 import { leaveRoom, sendReset } from '../net/connection';
 import { useStore } from '../net/store';
 import { SkinSwatch } from './SkinSwatch';
+import { Icon } from './Icons';
+import { roleColor } from '../theme';
 
 export function EndScreen() {
   const end = useStore((s) => s.end);
@@ -14,7 +16,7 @@ export function EndScreen() {
   const sorted = [...end.players].sort((a, b) => (a.team === b.team ? 0 : a.team === 'assassinos' ? -1 : 1));
   return (
     <div className={`overlay end ${killersWon ? 'killer' : 'innocent'}`}>
-      <div className="end-card">
+      <div className="end-card panel">
         <p className="eyebrow">{won ? '◆ Vitória' : '◇ Derrota'} · {Math.floor(end.durationSec / 60)}min {end.durationSec % 60}s</p>
         <h1 className="end-title">{killersWon ? 'Os assassinos venceram' : 'Os inocentes venceram'}</h1>
         <p className="end-reason">{end.reason}</p>
@@ -26,7 +28,9 @@ export function EndScreen() {
                 <SkinSwatch skin={p.skin} size={28} />
                 <div>
                   <div className="pname">{p.name}</div>
-                  <div className="prole" style={{ color: info.color }}>{info.name}</div>
+                  <div className="prole" style={{ color: roleColor(p.role) }}>
+                    <Icon name={p.role} size={13} /> {info.name}
+                  </div>
                 </div>
                 <span className={`status ${p.status}`}>{p.status === 'vivo' ? 'vivo' : p.status === 'preso' ? 'preso' : '✝'}</span>
               </div>

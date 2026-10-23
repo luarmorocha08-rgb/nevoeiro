@@ -6,10 +6,16 @@ import { GameScreen } from './ui/GameScreen';
 import { Home } from './ui/Home';
 import { Lobby } from './ui/Lobby';
 import { SettingsModal } from './ui/Settings';
+import { MenuBackground } from './ui/MenuBackground';
 
 export function App() {
   const screen = useStore((s) => s.screen);
   const conn = useStore((s) => s.conn);
+  const colorblind = useStore((s) => s.settings.colorblind);
+
+  useEffect(() => {
+    document.body.classList.toggle('cb', colorblind);
+  }, [colorblind]);
 
   useEffect(() => {
     void tryResume();
@@ -24,6 +30,7 @@ export function App() {
 
   return (
     <>
+      {screen !== 'game' && <MenuBackground />}
       {screen === 'home' && <Home />}
       {screen === 'lobby' && <Lobby />}
       {screen === 'game' && <GameScreen />}

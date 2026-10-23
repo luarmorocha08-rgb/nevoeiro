@@ -15,6 +15,11 @@ export interface ServerPlayer {
 
   x: number;
   z: number;
+  /** velocidade e stamina (mesma simulação da predição do cliente) */
+  vx: number;
+  vz: number;
+  stamina: number;
+  exhausted: boolean;
   yaw: number;
   /** 0 parado, 1 andando, 2 correndo */
   moving: number;

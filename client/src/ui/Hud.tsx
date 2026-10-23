@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
-import { ROLE_INFO } from '@nevoeiro/shared';
+import { CONFIG, ROLE_INFO } from '@nevoeiro/shared';
 import { voice } from '../voice/VoiceManager';
-import { net } from '../net/netState';
+import { net, serverNow } from '../net/netState';
 import { useStore } from '../net/store';
 import { isTouchDevice } from '../quality';
+import { THEME, roleColor, teamColor } from '../theme';
 import { AbilityBar } from './AbilityBar';
 import { Chat } from './Chat';
 import { EndScreen } from './EndScreen';
+import { Icon } from './Icons';
 import { MapOverlay, Minimap } from './Minimap';
 import { RoleReveal } from './RoleReveal';
 import { TouchControls } from './TouchControls';
+import { Tutorial } from './Tutorial';
 
 export function Hud() {
   const touch = isTouchDevice();
@@ -18,6 +21,7 @@ export function Hud() {
   const conn = useStore((s) => s.conn);
   const alive = useStore((s) => s.you?.alive ?? true);
   const locked = useStore((s) => s.pointerLocked);
+  const showFps = useStore((s) => s.settings.showFps);
   const compact = touch || window.innerWidth < 760;
 
   return (
@@ -26,19 +30,28 @@ export function Hud() {
       <TopBar />
       <Alerts />
       <Toasts />
-      <div className="hud-right-top">
-        <Minimap size={compact ? 108 : 168} />
-        <VoiceWidget touch={touch} />
-      </div>
+      {!end && (
+        <div className="hud-right-top">
+          <Minimap size={compact ? 112 : 168} />
+          <VoiceWidget touch={touch} />
+          <button className="round-btn gear-btn" aria-label="Configurações" title="Configurações" onClick={() => useStore.getState().set({ settingsOpen: true })}>
+            <Icon name="gear" size={20} />
+          </button>
+        </div>
+      )}
       <ExaminePanel />
       <SpectatorBanner />
       <StatusEffects />
-      <Chat compact={compact} />
+      {!end && <Chat compact={compact} />}
       {phase === 'playing' && !end && <AbilityBar touch={touch} />}
+      {phase === 'playing' && !end && alive && <StaminaBar />}
+      <ActionFeedback />
       {!touch && !locked && phase === 'playing' && alive && !end && (
         <div className="click-hint">Clique na tela para controlar a câmera · Esc libera o mouse</div>
       )}
-      {!touch && alive && phase === 'playing' && <div className="crosshair" />}
+      {!touch && alive && phase === 'playing' && !end && <div className="crosshair" />}
+      {phase === 'playing' && !end && <Tutorial touch={touch} />}
+      {showFps && <FpsCounter />}
       <MapOverlay />
       <RoleReveal />
       <EndScreen />
@@ -62,29 +75,41 @@ function TopBar() {
   const set = useStore((s) => s.set);
   if (!role) return null;
   const info = ROLE_INFO[role.role];
+  const killer = info.team === 'assassinos';
   const dead = counts?.deadInnocents ?? 0;
   const need = counts?.killsNeeded ?? role.killsNeeded;
+  const color = roleColor(role.role);
   return (
     <div className="topbar">
-      <button className="role-chip" style={{ borderColor: info.color }} onClick={() => set({ showRole: true })}>
-        <span className="role-dot" style={{ background: info.color }} />
+      <button className="role-chip" onClick={() => set({ showRole: true })} title="Ver seu papel (Tab)">
+        <span className="role-icon-wrap" style={{ color }}>
+          <Icon name={role.role} size={20} />
+        </span>
         <span className="role-name">{info.name}</span>
-        <span className="role-team">{info.team === 'assassinos' ? 'assassino' : 'inocente'}</span>
+        {/* a cor do time de assassinos só aparece para os próprios assassinos */}
+        <span className="team-tag" data-shape={killer ? '◆ ' : '● '} style={{ color: teamColor(info.team) }}>
+          {killer ? 'assassino' : 'inocente'}
+        </span>
       </button>
       {counts && (
         <div className="counter" title="Inocentes vivos · mortes que os assassinos precisam">
-          <span className="c-alive">◇ {counts.aliveInnocents}/{counts.totalInnocents} inocentes vivos</span>
+          <span className="c-alive">
+            <Icon name="civil" size={14} /> {counts.aliveInnocents}/{counts.totalInnocents} inocentes vivos
+          </span>
           <span className="c-goal">
-            <span className="goal-bar"><span style={{ width: `${Math.min(100, (dead / need) * 100)}%` }} /></span>
-            ✝ {dead}/{need}
+            <span className="goal-bar">
+              <span style={{ width: `${Math.min(100, (dead / need) * 100)}%` }} />
+            </span>
+            <Icon name="skull" size={13} /> {dead}/{need}
           </span>
         </div>
       )}
-      {you?.disguise && <span className="pill morph">🎭 Disfarçado de {you.disguise}</span>}
-      {you?.invisible && <span className="pill ghost">👻 Invisível</span>}
-      {you?.thermal && <span className="pill thermal">🌡 Visão térmica</span>}
-      {you?.zombie === 'voltando' && <span className="pill zombie">⚰ Voltando em {Math.ceil((you.zombieReturnIn ?? 0) / 1000)}s</span>}
-      {you?.zombie === 'retornou' && <span className="pill zombie">⚰ Morto-vivo · 1 morte</span>}
+      {you?.disguise && <span className="pill morph"><Icon name="morph" size={15} /> Disfarçado de {you.disguise}</span>}
+      {you?.invisible && <span className="pill ghost"><Icon name="invisible" size={15} /> Invisível</span>}
+      {you?.thermal && <span className="pill thermal"><Icon name="thermal" size={15} /> Visão térmica</span>}
+      {you?.hidden && <span className="pill hidden"><Icon name="hide" size={15} /> Escondido · {you.hidden}</span>}
+      {you?.zombie === 'voltando' && <span className="pill zombie"><Icon name="zumbi" size={15} /> Voltando em {Math.ceil((you.zombieReturnIn ?? 0) / 1000)}s</span>}
+      {you?.zombie === 'retornou' && <span className="pill zombie"><Icon name="zumbi" size={15} /> Morto-vivo · 1 morte</span>}
     </div>
   );
 }
@@ -96,13 +121,14 @@ function Alerts() {
     const h = setInterval(() => setT((t) => t + 1), 1000);
     return () => clearInterval(h);
   }, []);
-  const now = Date.now();
-  const visible = alerts.filter((a) => now - a.at < 7000 || now - a.at < 0);
+  // `at` vem do relógio do servidor: compara com o relógio do servidor estimado
+  const now = serverNow();
+  const visible = alerts.filter((a) => now - a.at < CONFIG.alerts.toastSeconds * 1000);
   return (
-    <div className="alerts">
+    <div className="alerts" role="status" aria-live="polite">
       {visible.map((a) => (
         <div key={a.id} className={`alert ${a.kind}`}>
-          <span className="alert-icon">{a.kind === 'revive' ? '✦' : a.kind === 'arrest' ? '⛓' : '✝'}</span>
+          <Icon name={a.kind === 'revive' ? 'star' : a.kind === 'arrest' ? 'chain' : 'skull'} size={17} color={a.kind === 'revive' ? THEME.alert.revive : undefined} />
           {a.text}
         </div>
       ))}
@@ -119,10 +145,33 @@ function Toasts() {
     return () => clearTimeout(h);
   }, [toasts, set]);
   return (
-    <div className="toasts">
+    <div className="toasts" role="status" aria-live="polite">
       {toasts.map((t) => (
         <div key={t.id} className={`toast ${t.level}`}>{t.text}</div>
       ))}
+    </div>
+  );
+}
+
+/** Texto curto confirmando a ação (com a cor do papel). */
+function ActionFeedback() {
+  const fb = useStore((s) => s.feedback);
+  const role = useStore((s) => s.role?.role);
+  if (!fb || Date.now() - fb.at > 1500) return null;
+  return (
+    <div key={fb.at} className="feedback" style={{ color: roleColor(role) }}>
+      <Icon name={fb.action} size={18} /> {fb.text}
+    </div>
+  );
+}
+
+function StaminaBar() {
+  const you = useStore((s) => s.you);
+  if (!you) return null;
+  const pct = (you.stamina / CONFIG.move.stamina.max) * 100;
+  return (
+    <div className={`stamina${you.exhausted ? ' exhausted' : ''}${pct >= 99.5 ? ' full' : ''}`} role="meter" aria-label="Stamina" aria-valuenow={Math.round(pct)}>
+      <span style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -135,7 +184,9 @@ function ExaminePanel() {
   const s = ex.secondsAgo % 60;
   return (
     <div className="examine panel">
-      <p className="eyebrow">🔍 Exame do corpo</p>
+      <p className="eyebrow" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <Icon name="examine" size={14} color={THEME.role.detetive} /> Exame do corpo
+      </p>
       <h3>{ex.victimName}</h3>
       <p>Morreu há <strong>{m > 0 ? `${m}min ${s}s` : `${s}s`}</strong> — {ex.location}</p>
       <p>Causa: <strong className="killer-type">{ex.killer}</strong></p>
@@ -146,9 +197,10 @@ function ExaminePanel() {
 
 function SpectatorBanner() {
   const you = useStore((s) => s.you);
-  if (!you || you.alive) return null;
+  const end = useStore((s) => s.end);
+  if (!you || you.alive || end) return null;
   return (
-    <div className="spectator-banner">
+    <div className="spectator-banner glass">
       {you.arrested ? '⛓ Você foi preso' : you.zombie === 'voltando' ? '⚰ Sob a terra…' : '✝ Você morreu'} · espectador
       <span className="muted"> — WASD voa · Espaço/C sobe e desce · os vivos não te ouvem</span>
     </div>
@@ -159,11 +211,18 @@ function StatusEffects() {
   const you = useStore((s) => s.you);
   return (
     <>
-      {you?.thermal && <div className="thermal-overlay" />}
       {you?.invisible && <div className="ghost-overlay" />}
+      {you?.hidden && <div className="hidden-overlay" />}
       {you && you.frozen > 0 && <div className="frozen-banner">⛓ Algemado · {Math.ceil(you.frozen / 1000)}s</div>}
     </>
   );
+}
+
+function FpsCounter() {
+  const fps = useStore((s) => s.fps);
+  const q = useStore((s) => s.settings.quality);
+  const auto = useStore((s) => s.autoQuality);
+  return <div className="fps">{fps} FPS · {q === 'auto' ? `auto (${auto ?? 'medindo'})` : q}</div>;
 }
 
 function VoiceWidget({ touch }: { touch: boolean }) {
@@ -200,8 +259,9 @@ function VoiceWidget({ touch }: { touch: boolean }) {
         onPointerDown={() => touch && ptt && (set({ voice: { ...v, pttHeld: true } }), void voice.applyMic())}
         onPointerUp={() => touch && ptt && (set({ voice: { ...v, pttHeld: false } }), void voice.applyMic())}
         title={v.reason ?? label}
+        aria-label={v.micOn ? 'Mutar microfone' : 'Ativar microfone'}
       >
-        {v.micOn ? '🎙' : '🔇'}
+        <Icon name={v.micOn ? 'mic' : 'micOff'} size={20} />
       </button>
       <div className="voice-info">
         <span className="voice-label">{label}{ptt && v.status === 'on' ? ' · segure V' : ''}</span>
