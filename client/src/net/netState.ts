@@ -55,6 +55,8 @@ export const net = {
   cameraYaw: 0,
   fx: [] as FxItem[],
   fxSeq: 0,
+  /** sino tocado: a neblina afina até este performance.now() */
+  bellUntil: 0,
 };
 
 export function serverNow(): number {
@@ -169,6 +171,7 @@ export function resetNet() {
   net.you = null;
   net.pending = [];
   net.fx = [];
+  net.bellUntil = 0;
   lastEntityKey = '';
   lastBodyKey = '';
 }

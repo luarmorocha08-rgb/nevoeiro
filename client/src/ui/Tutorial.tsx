@@ -4,7 +4,7 @@ import { useStore } from '../net/store';
 import { roleColor } from '../theme';
 import { Icon } from './Icons';
 
-const KEY = 'nevoeiro.tutorial.v1';
+const KEY = 'nevoeiro.tutorial.v2';
 
 function seen(): boolean {
   try {
@@ -43,6 +43,14 @@ export function Tutorial({ touch }: { touch: boolean }) {
       text: info.abilities.length
         ? `${info.description} Use ${touch ? 'os botões redondos' : 'Q e E'}; o alvo mais próximo à sua frente ganha um contorno.`
         : `${info.description}`,
+    },
+    {
+      icon: 'tasks',
+      title: info.team === 'assassinos' ? 'Tarefas falsas' : 'Tarefas da vila',
+      text:
+        info.team === 'assassinos'
+          ? `Você recebeu tarefas FALSAS: vá até os losangos e finja (${touch ? 'botão' : 'F'}) para se misturar. Cuidado: lampião que você "acende" continua apagado, e o sino não toca.`
+          : `Siga os losangos dourados e aperte ${touch ? 'o botão' : 'F'} para fazer a tarefa. Barra da vila cheia = vitória dos inocentes. Acender lampião e tocar o sino todos veem: é uma prova de inocência.`,
     },
     {
       icon: 'chat',

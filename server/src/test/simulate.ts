@@ -5,7 +5,7 @@
 process.env.NODE_ENV = 'test';
 process.env.EVENT_LOG_TO_FILE = 'false';
 import assert from 'node:assert/strict';
-import { CONFIG, HIDE_SPOTS, initialMoveState, killersFor, stepMovement, type EndMsg } from '@nevoeiro/shared';
+import { CONFIG, HIDE_SPOTS, TASK_STATIONS, initialMoveState, killersFor, lampLit, resolveCircle, stepMovement, taskStation, type EndMsg } from '@nevoeiro/shared';
 import { Match, type MatchIO } from '../game/Match';
 import { assignRoles } from '../game/RoleAssigner';
 import type { ServerPlayer } from '../game/types';
@@ -205,6 +205,80 @@ const killers = (m: Match) => [...m.players.values()].filter((p) => p.role.isKil
   const b = stepMovement(s, { mx: 0.3, mz: 0.7, run: true, dt: 1 / 30 });
   assert.deepEqual(a, b, 'determinístico');
   console.log('✓ aceleração e stamina');
+}
+
+// ---- tarefas da vila
+{
+  // estações alcançáveis (fora de colisões)
+  for (const st of TASK_STATIONS) {
+    const r = resolveCircle({ x: st.x, z: st.z }, CONFIG.move.radius);
+    assert.ok(Math.hypot(r.x - st.x, r.z - st.z) < 0.05, `estação ${st.id} livre`);
+  }
+  const g = makeMatch(10, 7);
+  g.advance(CONFIG.match.revealSeconds + 1);
+  for (const p of g.m.players.values()) p.bot = undefined;
+  const all = [...g.m.players.values()];
+  for (const p of all) assert.equal(p.tasks.length, CONFIG.tasks.perPlayer, 'tarefas por jogador');
+  const innocentTasks = all.filter((p) => !p.role.isKiller).reduce((a, p) => a + p.tasks.length, 0);
+  assert.equal(g.m.tasksNeeded, Math.ceil(innocentTasks * CONFIG.tasks.villageGoal));
+  // lampiões não se repetem entre inocentes
+  const lamps = all.filter((p) => !p.role.isKiller).flatMap((p) => p.tasks.map((t) => t.id)).filter((id) => id.startsWith('lampiao'));
+  assert.equal(new Set(lamps).size, lamps.length, 'lampião único');
+
+  const inn = all.find((p) => !p.role.isKiller)!;
+  const st = taskStation(inn.tasks[0].id)!;
+  const other = TASK_STATIONS.find((t) => !inn.tasks.some((x) => x.id === t.id))!;
+  place(inn, st.x + 10, st.z);
+  assert.equal(g.m.taskOp(inn, { op: 'start', id: st.id }).ok, false, 'longe demais');
+  place(inn, st.x, st.z);
+  assert.equal(g.m.taskOp(inn, { op: 'start', id: other.id }).ok, false, 'tarefa de outro');
+  assert.equal(g.m.taskOp(inn, { op: 'finish', id: st.id }).ok, false, 'sem começar');
+  assert.equal(g.m.taskOp(inn, { op: 'start', id: st.id }).ok, true, 'começa');
+  g.set(500);
+  assert.equal(g.m.taskOp(inn, { op: 'finish', id: st.id }).ok, false, 'rápido demais');
+  g.set(st.seconds * 1000);
+  assert.equal(g.m.taskOp(inn, { op: 'finish', id: st.id }).ok, true, 'conclui');
+  assert.equal(g.m.tasksDone, 1, 'conta para a vila');
+  assert.equal(g.m.taskOp(inn, { op: 'start', id: st.id }).ok, false, 'não repete');
+
+  // afastar-se cancela
+  const st2 = taskStation(inn.tasks[1].id)!;
+  place(inn, st2.x, st2.z);
+  g.m.taskOp(inn, { op: 'start', id: st2.id });
+  place(inn, st2.x + 8, st2.z);
+  g.advance(0.2);
+  assert.equal(inn.taskActive, null, 'afastou: cancelou');
+
+  // assassino finge: não conta e não acende lampião
+  const k = killers(g.m)[0];
+  k.tasks = [{ id: 'lampiao-igreja', done: false }];
+  const ls = taskStation('lampiao-igreja')!;
+  place(k, ls.x, ls.z);
+  assert.ok(g.m.taskOp(k, { op: 'start', id: ls.id }).ok);
+  g.set(ls.seconds * 1000 + 10);
+  assert.ok(g.m.taskOp(k, { op: 'finish', id: ls.id }).ok);
+  assert.equal(g.m.tasksDone, 1, 'falsa não conta');
+  const lampIdx = 'lamp' in ls.visual! ? ls.visual.lamp : -1;
+  assert.equal(lampLit(g.m.lampsMask, lampIdx), false, 'assassino não acende');
+  // inocente acende
+  inn.tasks.push({ id: 'lampiao-igreja', done: false });
+  place(inn, ls.x, ls.z);
+  g.m.taskOp(inn, { op: 'start', id: ls.id });
+  g.set(ls.seconds * 1000 + 10);
+  g.m.taskOp(inn, { op: 'finish', id: ls.id });
+  assert.equal(lampLit(g.m.lampsMask, lampIdx), true, 'inocente acende');
+  assert.ok(g.broadcasts.some((b) => b.type === 'fx' && b.msg.kind === 'lamp'), 'efeito do lampião');
+
+  // barra cheia = vitória dos inocentes
+  g.m.tasksDone = g.m.tasksNeeded - 1;
+  const last = inn.tasks.find((t) => !t.done)!;
+  const lst = taskStation(last.id)!;
+  place(inn, lst.x, lst.z);
+  g.m.taskOp(inn, { op: 'start', id: lst.id });
+  g.set(lst.seconds * 1000 + 10);
+  g.m.taskOp(inn, { op: 'finish', id: lst.id });
+  assert.equal(g.end?.winner, 'inocentes', 'tarefas completas = inocentes vencem');
+  console.log('✓ tarefas (validação, falsas, lampião, vitória)');
 }
 
 // ---- partida inteira com bots termina com vencedor

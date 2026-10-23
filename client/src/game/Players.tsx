@@ -62,6 +62,7 @@ function RemotePlayer({ view }: { view: EntityView }) {
 
     const m = motion.current;
     m.speed = ent.flags & EF.FROZEN ? 0 : ent.speed;
+    m.state = ent.flags & EF.TASK ? 'task' : undefined;
     m.dissolve = Math.max(1 - entityFade(ent, nowP), wobble * 0.35);
     m.edge = ent.dissolving ? THEME.role.fantasma : wobble > 0 ? THEME.role.metamorfo : THEME.fog;
     if (!ent.leavingAt) body.current?.setNextKinematicTranslation(tmpV.set(ent.rx, 0.9, ent.rz));
@@ -227,7 +228,9 @@ export function LocalPlayer() {
     }
     net.cameraYaw = c.yaw;
 
-    const canMove = you.alive && you.frozen <= 0 && st.phase === 'playing' && !st.end;
+    // fazendo tarefa: fica parado (o minijogo usa as teclas)
+    const canMove = you.alive && you.frozen <= 0 && st.phase === 'playing' && !st.end && !st.taskOpen;
+    motion.current.state = st.taskOpen ? 'task' : undefined;
     acc.current += dt;
     let steps = 0;
     while (acc.current >= INPUT_DT && steps++ < MAX_STEPS_PER_FRAME) {

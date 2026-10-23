@@ -14,6 +14,7 @@ import { Bodies } from './Bodies';
 import { AmbientParticles, ChimneySmoke, FallingLeaves, FogController, FogLayers, FxLayer, TargetSystem, ThermalVision } from './Effects';
 import { LocalPlayer, OrbitCamera, RemotePlayers, SpectatorCamera } from './Players';
 import { PostFx } from './PostFx';
+import { TaskMarkers } from './TaskMarkers';
 import { World } from './World';
 
 /** Luz da lua fria e direcional, que acompanha o jogador (sombras só onde importa). */
@@ -170,6 +171,7 @@ export function GameCanvas() {
       {quality.smoke && <ChimneySmoke />}
       <FxLayer quality={quality} />
       <TargetSystem />
+      <TaskMarkers />
       <AudioSystem />
       <QualityGovernor level={level} />
       <PostFx quality={quality} />

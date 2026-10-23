@@ -6,12 +6,13 @@ import { useStore } from './net/store';
 import { currentRoom } from './net/connection';
 import { voice } from './voice/VoiceManager';
 import { applyThemeCss } from './theme';
+import { TASK_STATIONS } from '@nevoeiro/shared';
 import './styles.css';
 
 applyThemeCss();
 
 // depuração no console do navegador (só em desenvolvimento)
-if (import.meta.env.DEV) Object.assign(window, { __nevoeiro: { net, store: useStore, voice, pushFx, currentRoom } });
+if (import.meta.env.DEV) Object.assign(window, { __nevoeiro: { net, store: useStore, voice, pushFx, currentRoom, stations: TASK_STATIONS } });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

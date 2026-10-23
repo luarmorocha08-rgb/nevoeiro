@@ -61,8 +61,8 @@ export function RoleReveal() {
           )}
           <p className="reveal-goal">
             {killer
-              ? `Objetivo: matar ${role.killsNeeded} de ${role.totalInnocents} inocentes.`
-              : `Objetivo: eliminar ou prender os ${role.killers} assassinos antes que matem ${role.killsNeeded} inocentes.`}
+              ? `Objetivo: matar ${role.killsNeeded} de ${role.totalInnocents} inocentes antes que a vila termine as tarefas.`
+              : `Objetivo: terminar as tarefas da vila ou eliminar os ${role.killers} assassinos antes que matem ${role.killsNeeded} inocentes.`}
           </p>
           {phase === 'reveal' ? <p className="countdown">A névoa se fecha em {left}s…</p> : <p className="countdown">Toque para fechar</p>}
         </div>

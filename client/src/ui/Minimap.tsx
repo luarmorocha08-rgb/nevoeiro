@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { LOCATIONS, MAP_BLOCKS, WORLD } from '@nevoeiro/shared';
+import { LOCATIONS, MAP_BLOCKS, WORLD, taskStation } from '@nevoeiro/shared';
 import { confirmTeleport } from '../game/abilities';
 import { net } from '../net/netState';
 import { getState, useStore } from '../net/store';
@@ -75,6 +75,27 @@ function MapCanvas({ size, interactive }: { size: number; interactive: boolean }
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(m.kind === 'revive' ? '✦' : m.kind === 'arrest' ? '⛓' : '✝', tx(m.x), tx(m.z));
+      }
+      // suas tarefas pendentes (losangos dourados)
+      const tasks = getState().tasks;
+      if (tasks && getState().you?.alive !== false) {
+        ctx.fillStyle = tasks.fake ? THEME.alert.deathText : THEME.task;
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 1 * dpr;
+        for (const t of tasks.list) {
+          if (t.done) continue;
+          const st = taskStation(t.id);
+          if (!st) continue;
+          const r = 4.5 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(tx(st.x), tx(st.z) - r);
+          ctx.lineTo(tx(st.x) + r, tx(st.z));
+          ctx.lineTo(tx(st.x), tx(st.z) + r);
+          ctx.lineTo(tx(st.x) - r, tx(st.z));
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
       }
       // você
       const you = getState().you;

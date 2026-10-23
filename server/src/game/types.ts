@@ -37,6 +37,11 @@ export interface ServerPlayer {
   lastMoveAt: number;
   lastChatAt: number;
 
+  /** tarefas sorteadas (falsas para assassinos) */
+  tasks: { id: string; done: boolean }[];
+  /** tarefa em andamento */
+  taskActive: { id: string; startedAt: number } | null;
+
   bot?: BotBrain;
 }
 

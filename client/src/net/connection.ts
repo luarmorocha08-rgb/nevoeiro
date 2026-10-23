@@ -16,7 +16,10 @@ import {
   type SnapshotMsg,
   type ToastMsg,
   type AckMsg,
+  type TasksMsg,
+  type TaskOpMsg,
   type VoiceTokenMsg,
+  CONFIG,
 } from '@nevoeiro/shared';
 import { sfx } from '../audio/sfx';
 import { onActionAck } from '../game/feedback';
@@ -213,6 +216,20 @@ export function handleServerMessage(type: string, m: any) {
     case S2C.ack:
       onActionAck(m as AckMsg);
       break;
+    case S2C.tasks: {
+      const t = m as TasksMsg;
+      const st = getState();
+      const prev = st.tasks;
+      // minijogo aberto e o servidor cancelou (afastou, algemado, morreu): fecha
+      const patch: Record<string, unknown> = { tasks: t };
+      if (st.taskOpen && !t.active) patch.taskOpen = null;
+      if (prev) {
+        const finished = t.list.find((x) => x.done && !prev.list.find((p) => p.id === x.id)?.done);
+        if (finished) sfx.play('taskDone');
+      }
+      st.set(patch);
+      break;
+    }
     case S2C.toast:
       getState().pushToast(m as ToastMsg);
       break;
@@ -231,6 +248,11 @@ export function handleServerMessage(type: string, m: any) {
       else if (f.kind === 'morph') sfx.play('morph', 0.6, pos);
       else if (f.kind === 'cuff') sfx.play('cuff', 0.8, pos);
       else if (f.kind === 'zombie') sfx.play('vanish', 0.8, pos);
+      else if (f.kind === 'lamp') sfx.play('lamp', 1, pos);
+      else if (f.kind === 'bell') {
+        sfx.play('bell', 1.2, pos);
+        net.bellUntil = performance.now() + CONFIG.tasks.bellFogSeconds * 1000;
+      }
       break;
     }
     case S2C.voice:
@@ -342,6 +364,9 @@ export function sendBots(count: number) {
 }
 export function sendReset() {
   send(C2S.lobbyReset);
+}
+export function sendTask(op: TaskOpMsg['op'], id: string) {
+  send(C2S.task, { op, id } satisfies TaskOpMsg);
 }
 export function sendReport(targetId: string, reason: string) {
   send(C2S.report, { targetId, reason });

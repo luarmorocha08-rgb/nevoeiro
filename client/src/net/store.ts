@@ -8,6 +8,7 @@ import type {
   Phase,
   RoleMsg,
   SnapshotMsg,
+  TasksMsg,
   ToastMsg,
   YouSnap,
 } from '@nevoeiro/shared';
@@ -116,6 +117,14 @@ interface State {
   autoQuality: 'low' | 'medium' | 'high' | null;
   fps: number;
   tutorialOpen: boolean;
+  /** suas tarefas (falsas se assassino) */
+  tasks: TasksMsg | null;
+  /** estação da sua tarefa pendente ao alcance (botão "Fazer tarefa") */
+  taskNear: string | null;
+  /** minijogo aberto */
+  taskOpen: string | null;
+  /** lista de tarefas recolhida */
+  tasksCollapsed: boolean;
 }
 
 interface Actions {
@@ -171,6 +180,10 @@ export const useStore = create<State & Actions>((set, get) => ({
   autoQuality: loadAutoQuality(),
   fps: 0,
   tutorialOpen: false,
+  tasks: null,
+  taskNear: null,
+  taskOpen: null,
+  tasksCollapsed: false,
 
   set: (p) => set(p),
 
@@ -230,6 +243,9 @@ export const useStore = create<State & Actions>((set, get) => ({
       feedback: null,
       readyFlash: null,
       tutorialOpen: false,
+      tasks: null,
+      taskNear: null,
+      taskOpen: null,
     }),
 }));
 

@@ -6,7 +6,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { CONFIG, MAP_BLOCKS, fogZoneAt, locationAt, type FxMsg } from '@nevoeiro/shared';
+import { CONFIG, LAMP_POSITIONS, MAP_BLOCKS, fogZoneAt, locationAt, type FxMsg } from '@nevoeiro/shared';
 import { net, type FxItem } from '../net/netState';
 import { getState, useStore } from '../net/store';
 import type { QualityProfile } from '../quality';
@@ -419,6 +419,33 @@ export function FxLayer({ quality }: { quality: QualityProfile }) {
         }, () => (b.visible = false));
         burst(glow, 90, () => ({ x: x + rnd(-0.8, 0.8), y: rnd(0, 1.5), z: z + rnd(-0.8, 0.8), vy: rnd(1, 3.5), life: rnd(1.2, 2.4), size: 0.18, color: C.anjo, drag: 0.4 }));
         flash(x, 2, z, C.anjo, 30, 2200);
+        break;
+      }
+      case 'lamp': {
+        // lampião acendendo: faíscas subindo da cabeça do poste
+        let lx = x;
+        let lz = z;
+        let best = Infinity;
+        for (const [px, pz] of LAMP_POSITIONS) {
+          const d = Math.hypot(px - x, pz - z);
+          if (d < best) {
+            best = d;
+            lx = px;
+            lz = pz;
+          }
+        }
+        burst(glow, 40, () => ({ x: lx + rnd(-0.15, 0.15), y: 4.2, z: lz + rnd(-0.15, 0.15), vx: rnd(-1.2, 1.2), vy: rnd(0.5, 2.6), vz: rnd(-1.2, 1.2), life: rnd(0.6, 1.3), size: 0.12, color: THEME.warmLight, gravity: 2, drag: 1.2 }));
+        flash(lx, 4.2, lz, THEME.warmLight, 30, 900);
+        break;
+      }
+      case 'bell': {
+        // sino: anéis dourados e poeira caindo da torre
+        const tx = 0;
+        const tz = -57.5;
+        burst(glow, 50, () => ({ x: tx + rnd(-2, 2), y: rnd(13, 16), z: tz + rnd(-2, 2), vx: rnd(-0.6, 0.6), vy: rnd(-1.4, -0.2), vz: rnd(-0.6, 0.6), life: rnd(1.6, 2.6), size: 0.16, color: THEME.task, alpha: 0.8 }));
+        ripple(x, z, THEME.task, 6, 1200);
+        setTimeout(() => ripple(x, z, THEME.task, 9, 1400), 450);
+        flash(tx, 14, tz, THEME.task, 40, 1600);
         break;
       }
       case 'examine': {

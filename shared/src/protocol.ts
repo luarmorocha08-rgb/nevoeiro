@@ -43,6 +43,11 @@ export interface ReportMsg {
   reason: string;
 }
 
+export interface TaskOpMsg {
+  op: 'start' | 'finish' | 'cancel';
+  id: string;
+}
+
 export const C2S = {
   input: 'input',
   action: 'action',
@@ -54,6 +59,7 @@ export const C2S = {
   voiceRequest: 'voice:request',
   report: 'report',
   sync: 'sync',
+  task: 'task',
 } as const;
 
 // ----------------------------- Servidor → Cliente -----------------------------
@@ -93,6 +99,8 @@ export const EF = {
   ALLY: 32,
   /** Escondido (só quem pode ver recebe: parceiro, mesmo esconderijo, espectador). */
   HIDDEN: 64,
+  /** Fazendo uma tarefa (de verdade ou fingindo — parece igual para os outros). */
+  TASK: 128,
 } as const;
 
 export interface EntitySnap {
@@ -157,7 +165,27 @@ export interface SnapshotMsg {
   a: { id: string; x: number; z: number }[];
   /** silhuetas térmicas (Rastreador) */
   th?: { id: string; x: number; z: number }[];
-  c: { aliveInnocents: number; totalInnocents: number; deadInnocents: number; killsNeeded: number; killers: number };
+  c: {
+    aliveInnocents: number;
+    totalInnocents: number;
+    deadInnocents: number;
+    killsNeeded: number;
+    killers: number;
+    /** tarefas da vila concluídas / necessárias para a vitória dos inocentes */
+    tasksDone: number;
+    tasksNeeded: number;
+    /** bits dos lampiões acesos (ver TASK_LAMPS) */
+    lamps: number;
+  };
+}
+
+/** Suas tarefas (enviado quando muda). */
+export interface TasksMsg {
+  list: { id: string; done: boolean }[];
+  /** true = tarefas falsas (assassino) */
+  fake: boolean;
+  /** tarefa em andamento (validada pelo servidor) */
+  active: string | null;
 }
 
 export interface AlertMsg {
@@ -204,7 +232,9 @@ export interface FxMsg {
     | 'vanish'
     | 'appear'
     | 'zombie'
-    | 'examine';
+    | 'examine'
+    | 'bell'
+    | 'lamp';
   x: number;
   z: number;
   x2?: number;
@@ -256,4 +286,5 @@ export const S2C = {
   end: 'end',
   serverTime: 'time',
   ack: 'ack',
+  tasks: 'tasks',
 } as const;

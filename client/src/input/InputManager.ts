@@ -11,7 +11,8 @@ export type InputAction =
   | 'pttDown'
   | 'pttUp'
   | 'escape'
-  | 'role';
+  | 'role'
+  | 'task';
 
 export interface InputSample {
   /** -1..1 (direita positiva) */
@@ -103,6 +104,10 @@ class InputManager {
       case 'KeyE':
       case 'Digit2':
         this.emit('ability1');
+        break;
+      case 'KeyF':
+      case 'Digit3':
+        this.emit('task');
         break;
       case 'Enter':
       case 'KeyT':

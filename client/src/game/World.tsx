@@ -18,8 +18,10 @@ import {
   ROADS,
   WORLD,
   buildingWalls,
+  lampLit,
   type MapBlock,
 } from '@nevoeiro/shared';
+import { useStore } from '../net/store';
 import { net } from '../net/netState';
 import type { QualityProfile } from '../quality';
 import { THEME } from '../theme';
@@ -550,10 +552,17 @@ function Well({ b }: { b: MapBlock }) {
 // ------------------------------------------------------------------ luzes e tochas
 
 const flameMat = new THREE.MeshStandardMaterial({ color: '#FFD9A0', emissive: THEME.warmLight, emissiveIntensity: 2.6, toneMapped: false });
+const deadFlameMat = new THREE.MeshStandardMaterial({ color: '#20242a', roughness: 0.3, metalness: 0.2, transparent: true, opacity: 0.85 });
 const lampPostMat = new THREE.MeshStandardMaterial({ color: '#141515', metalness: 0.5, roughness: 0.6 });
 
-/** Lampiões com chama tremulando (a luz pontual vem de WarmLights). */
+/** Bits dos lampiões acesos (os das tarefas começam apagados). */
+function useLampMask(): number {
+  return useStore((s) => s.counts?.lamps ?? 0);
+}
+
+/** Lampiões com chama tremulando (a luz pontual vem de WarmLights). Apagados até a tarefa. */
 function Lamps() {
+  const mask = useLampMask();
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
     flameMat.emissiveIntensity = 2.3 + Math.sin(t * 13) * 0.25 + Math.sin(t * 29.7) * 0.15;
@@ -565,7 +574,7 @@ function Lamps() {
           <mesh position={[0, 2.1, 0]} castShadow material={lampPostMat}>
             <cylinderGeometry args={[0.06, 0.09, 4.2, 6]} />
           </mesh>
-          <mesh position={[0, 4.2, 0]} material={flameMat}>
+          <mesh position={[0, 4.2, 0]} material={lampLit(mask, i) ? flameMat : deadFlameMat}>
             <boxGeometry args={[0.32, 0.44, 0.32]} />
           </mesh>
         </group>
@@ -581,13 +590,19 @@ function Lamps() {
  */
 function WarmLights({ count }: { count: number }) {
   const lights = useRef<THREE.PointLight[]>([]);
+  const timer = useRef(0);
+  const mask = useLampMask();
   const spots = useMemo(() => {
-    const list: { x: number; y: number; z: number; power: number }[] = LAMP_POSITIONS.map(([x, z]) => ({ x, y: 4, z, power: 1 }));
+    const list: { x: number; y: number; z: number; power: number }[] = LAMP_POSITIONS.flatMap(([x, z], i) =>
+      lampLit(mask, i) ? [{ x, y: 4, z, power: 1 }] : [],
+    );
     for (const b of MAP_BLOCKS) if (b.kind === 'building') list.push({ x: b.x, y: 2.2, z: b.z, power: 0.8 });
     return list;
-  }, []);
+  }, [mask]);
+  useEffect(() => {
+    timer.current = 0; // reavalia na hora (lampião acabou de acender)
+  }, [spots]);
   const assigned = useRef<number[]>([]);
-  const timer = useRef(0);
   useFrame(({ clock }, dt) => {
     timer.current -= dt;
     if (timer.current <= 0) {

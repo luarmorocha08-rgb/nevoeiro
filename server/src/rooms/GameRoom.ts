@@ -12,6 +12,7 @@ import {
   type InputMsg,
   type LobbyUpdateMsg,
   type ReportMsg,
+  type TaskOpMsg,
   type ToastMsg,
 } from '@nevoeiro/shared';
 import { BOT_NAMES } from '../game/Bots';
@@ -203,6 +204,11 @@ export class GameRoom extends Room<GameState> {
       this.sendToast(client, 'Denúncia registrada. Obrigado.', 'info');
     });
 
+    this.onMessage(C2S.task, (client, msg: TaskOpMsg) => {
+      const p = this.match?.bySession(client.sessionId);
+      if (p && msg && typeof msg.op === 'string') this.match!.taskOp(p, msg);
+    });
+
     this.onMessage(C2S.sync, (client) => {
       const p = this.match?.bySession(client.sessionId);
       if (p) this.resync(client, p);
@@ -239,6 +245,7 @@ export class GameRoom extends Room<GameState> {
     for (const p of this.match.players.values()) {
       if (!p.sessionId) continue;
       this.clientsBySession.get(p.sessionId)?.send(S2C.role, this.match.roleMessage(p));
+      this.match.sendTasks(p);
     }
   }
 
@@ -249,6 +256,7 @@ export class GameRoom extends Room<GameState> {
   private resync(client: Client, p: ServerPlayer) {
     if (!this.match) return;
     client.send(S2C.role, this.match.roleMessage(p));
+    client.send(S2C.tasks, this.match.tasksMessage(p));
     if (this.match.result) client.send(S2C.end, this.match.result);
     void this.sendVoiceToken(p);
   }

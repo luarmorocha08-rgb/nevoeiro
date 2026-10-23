@@ -29,6 +29,8 @@ export const THEME = {
     rastreador: '#FF6B3D',
     civil: '#8A93A6',
   } satisfies Record<RoleId, string>,
+  /** Tarefas da vila (marcadores, lista, barra). */
+  task: '#E8C46A',
   alert: {
     death: '#7A1E24',
     deathText: '#FFB3B6',

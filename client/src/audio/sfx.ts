@@ -22,7 +22,12 @@ export type SfxName =
   | 'cuff'
   | 'thermal'
   | 'ready'
-  | 'hide';
+  | 'hide'
+  | 'bell'
+  | 'lamp'
+  | 'taskHit'
+  | 'taskMiss'
+  | 'taskDone';
 
 let ctx: AudioContext | null = null;
 let sfxBus: GainNode | null = null;
@@ -124,7 +129,7 @@ export const sfx = {
   play(name: SfxName, volume = 1, pos?: { x: number; z: number }) {
     try {
       if (!audioReady()) return;
-      const out = spatialOut(pos, name === 'shot' ? 80 : 40);
+      const out = spatialOut(pos, name === 'shot' ? 80 : name === 'bell' ? 160 : 40);
       const v = volume;
       switch (name) {
         case 'alert':
@@ -185,6 +190,31 @@ export const sfx = {
           break;
         case 'hide':
           noise(out, 0.3, 0.12 * v, 'lowpass', 1200);
+          break;
+        case 'bell':
+          // sino grande: parciais inarmônicos, 4 badaladas
+          for (let k = 0; k < 4; k++) {
+            for (const [ratio, amp] of [[0.5, 0.6], [1, 1], [1.19, 0.4], [2.4, 0.45], [3.0, 0.3], [4.2, 0.18]] as const) {
+              tone(out, 174 * ratio, 3.2, 'sine', 0.09 * amp * v, k * 1.6);
+            }
+          }
+          break;
+        case 'lamp':
+          noise(out, 0.5, 0.16 * v, 'bandpass', 900, 0, 1.2);
+          noise(out, 0.08, 0.2 * v, 'highpass', 4000, 0.05);
+          noise(out, 0.06, 0.15 * v, 'highpass', 5000, 0.22);
+          tone(out, 160, 0.6, 'sine', 0.05 * v, 0, 320);
+          break;
+        case 'taskHit':
+          tone(out, 740, 0.09, 'triangle', 0.08 * v);
+          tone(out, 1110, 0.12, 'triangle', 0.05 * v, 0.04);
+          break;
+        case 'taskMiss':
+          tone(out, 180, 0.18, 'sawtooth', 0.04 * v, 0, 120);
+          break;
+        case 'taskDone':
+          [523, 659, 784].forEach((f, i) => tone(out, f, 0.5, 'sine', 0.08 * v, i * 0.09));
+          tone(out, 1046, 0.8, 'triangle', 0.05 * v, 0.27);
           break;
       }
     } catch {

@@ -13,6 +13,7 @@ import { MapOverlay, Minimap } from './Minimap';
 import { RoleReveal } from './RoleReveal';
 import { TouchControls } from './TouchControls';
 import { Tutorial } from './Tutorial';
+import { TaskGame, TaskList, TaskPrompt, VillageProgress } from './Tasks';
 
 export function Hud() {
   const touch = isTouchDevice();
@@ -22,6 +23,7 @@ export function Hud() {
   const alive = useStore((s) => s.you?.alive ?? true);
   const locked = useStore((s) => s.pointerLocked);
   const showFps = useStore((s) => s.settings.showFps);
+  const taskOpen = useStore((s) => !!s.taskOpen);
   const compact = touch || window.innerWidth < 760;
 
   return (
@@ -39,6 +41,9 @@ export function Hud() {
           </button>
         </div>
       )}
+      {phase === 'playing' && !end && <TaskList compact={compact} />}
+      {phase === 'playing' && !end && alive && <TaskPrompt touch={touch} />}
+      {phase === 'playing' && !end && alive && <TaskGame touch={touch} />}
       <ExaminePanel />
       <SpectatorBanner />
       <StatusEffects />
@@ -46,7 +51,7 @@ export function Hud() {
       {phase === 'playing' && !end && <AbilityBar touch={touch} />}
       {phase === 'playing' && !end && alive && <StaminaBar />}
       <ActionFeedback />
-      {!touch && !locked && phase === 'playing' && alive && !end && (
+      {!touch && !locked && !taskOpen && phase === 'playing' && alive && !end && (
         <div className="click-hint">Clique na tela para controlar a câmera · Esc libera o mouse</div>
       )}
       {!touch && alive && phase === 'playing' && !end && <div className="crosshair" />}
@@ -102,6 +107,7 @@ function TopBar() {
             </span>
             <Icon name="skull" size={13} /> {dead}/{need}
           </span>
+          <VillageProgress />
         </div>
       )}
       {you?.disguise && <span className="pill morph"><Icon name="morph" size={15} /> Disfarçado de {you.disguise}</span>}

@@ -2,6 +2,7 @@ import {
   CONFIG,
   findPath,
   randomFreePoint,
+  taskStation,
   type ActionType,
   type Vec2,
 } from '@nevoeiro/shared';
@@ -38,6 +39,9 @@ export class BotBrain {
   private examined = new Set<string>();
   /** assassinos que este bot viu matar (netId → quando) */
   private suspects = new Map<string, number>();
+  /** tarefa para onde está indo / fazendo */
+  private taskGoal: string | null = null;
+  private taskFinishAt = 0;
 
   suspect(netId: string, now: number) {
     this.suspects.set(netId, now);
@@ -66,7 +70,49 @@ export class BotBrain {
       return;
     }
     this.think(p, m, dt, now);
+    // fazendo tarefa: fica parado até terminar
+    if (p.taskActive) {
+      m.stop(p);
+      if (now >= this.taskFinishAt) {
+        m.taskOp(p, { op: 'finish', id: p.taskActive.id });
+        this.taskGoal = null;
+      }
+      return;
+    }
     this.move(p, m, dt, now);
+    this.reachTask(p, m, now);
+  }
+
+  /** Escolhe a tarefa pendente mais próxima e vai até ela. */
+  private seekTask(p: ServerPlayer, now: number): boolean {
+    const pending = p.tasks
+      .filter((t) => !t.done)
+      .map((t) => taskStation(t.id)!)
+      .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
+    const st = pending[0];
+    if (!st) return false;
+    this.taskGoal = st.id;
+    this.goTo(p, st, now, 40000);
+    this.running = false;
+    return true;
+  }
+
+  /** Chegou na estação: começa a tarefa (mesma validação de um humano). */
+  private reachTask(p: ServerPlayer, m: Match, now: number) {
+    if (!this.taskGoal) return;
+    const st = taskStation(this.taskGoal);
+    if (!st || p.tasks.find((t) => t.id === st.id)?.done) {
+      this.taskGoal = null;
+      return;
+    }
+    if (Math.hypot(st.x - p.x, st.z - p.z) > CONFIG.tasks.radius * 0.8) return;
+    const res = m.taskOp(p, { op: 'start', id: st.id });
+    if (res.ok) {
+      this.path = [];
+      this.taskFinishAt = now + (st.seconds + CONFIG.tasks.botExtraSeconds + this.rnd() * 3) * 1000;
+    } else {
+      this.taskGoal = null;
+    }
   }
 
   private think(p: ServerPlayer, m: Match, dt: number, now: number) {
@@ -98,6 +144,8 @@ export class BotBrain {
           if (prey) this.goTo(p, prey, now, 2500);
         }
       }
+      // enquanto a faca recarrega, finge fazer tarefas para se misturar
+      if (!killReady && !this.taskGoal && chance(CONFIG.tasks.botTaskChancePerSecond * 0.3)) this.seekTask(p, now);
       if (role.id === 'fantasma' && chance(CONFIG.bots.abilityChancePerSecond)) tryAct('invisible');
       if (role.id === 'metamorfo' && chance(CONFIG.bots.abilityChancePerSecond)) {
         const t = near(CONFIG.roles.metamorfo.range)[0];
@@ -149,6 +197,9 @@ export class BotBrain {
       if (t) tryAct('shoot', { targetId: t.netId });
     }
 
+    // sem ameaça à vista: trabalha nas tarefas da vila
+    if (!threat && !this.taskGoal && chance(CONFIG.tasks.botTaskChancePerSecond)) this.seekTask(p, now);
+
     if (role.id === 'rastreador' && chance(CONFIG.bots.abilityChancePerSecond)) tryAct('thermal');
     if (role.id === 'detetive' || role.id === 'anjo') {
       for (const b of m.bodies.values()) {
@@ -172,6 +223,15 @@ export class BotBrain {
   }
 
   private move(p: ServerPlayer, m: Match, dt: number, now: number) {
+    if (!this.path.length || now > this.repathAt) {
+      // indo para uma tarefa: o caminho acabou perto da estação (reachTask decide)
+      if (this.taskGoal && now <= this.repathAt) {
+        const st = taskStation(this.taskGoal);
+        if (!st) return;
+        this.path = [{ x: st.x, z: st.z }];
+      }
+      if (this.taskGoal && now > this.repathAt) this.taskGoal = null;
+    }
     if (!this.path.length || now > this.repathAt) {
       // às vezes fica parado um pouco, como gente de verdade
       if (this.rnd() < 0.3 * dt) {

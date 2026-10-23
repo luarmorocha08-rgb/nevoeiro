@@ -113,6 +113,26 @@ export const CONFIG = {
     },
   },
 
+  /** Tarefas da vila (estações em /shared/src/tasks.ts). */
+  tasks: {
+    /** Tarefas sorteadas para cada jogador (assassinos recebem o mesmo número, falsas). */
+    perPlayer: 5,
+    /** Fração das tarefas dos inocentes que precisa ser concluída para os inocentes vencerem. */
+    villageGoal: 0.8,
+    /** Distância (m) da estação para poder fazer a tarefa. */
+    radius: 2.3,
+    /** O servidor aceita a conclusão com esta fração do tempo mínimo (tolerância de rede). */
+    minTimeFactor: 0.85,
+    /** Sino tocado: a neblina afina por este tempo (s) para todos... */
+    bellFogSeconds: 14,
+    /** ...multiplicando a densidade por este fator. */
+    bellFogFactor: 0.55,
+    /** Bots: segundos parados na estação (além do tempo mínimo). */
+    botExtraSeconds: 4,
+    /** Bots inocentes: chance (por segundo) de ir para a próxima tarefa quando estão vagando. */
+    botTaskChancePerSecond: 0.12,
+  },
+
   /** Esconderijos (armários, feno, arbustos altos): ninguém vê quem está dentro, só o Rastreador. */
   hiding: {
     enabled: true,

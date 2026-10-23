@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { triggerAbility } from '../game/abilities';
+import { cancelTask, openTask } from '../game/tasks';
 import { resetCooldownWatch } from '../game/feedback';
 import { GameCanvas } from '../game/GameCanvas';
 import { input, setKeyBlocker } from '../input/InputManager';
@@ -24,7 +25,12 @@ export function GameScreen() {
     document.addEventListener('pointerlockchange', onLock);
     const off = input.on((a) => {
       const st = getState();
+      // minijogo aberto: as teclas são do minijogo
+      if (st.taskOpen && a !== 'escape' && a !== 'pttDown' && a !== 'pttUp' && a !== 'mute') return;
       switch (a) {
+        case 'task':
+          openTask();
+          break;
         case 'ability0':
           triggerAbility(0);
           break;
@@ -53,6 +59,10 @@ export function GameScreen() {
           void voice.applyMic();
           break;
         case 'escape':
+          if (st.taskOpen) {
+            cancelTask();
+            break;
+          }
           st.set({ mapOpen: false, teleportPicking: false, showRole: st.phase === 'reveal', examine: null });
           break;
       }

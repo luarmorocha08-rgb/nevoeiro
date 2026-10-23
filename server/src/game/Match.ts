@@ -12,6 +12,11 @@ import {
   stepMovement,
   WORLD,
   hideSpotAt,
+  TASK_STATIONS,
+  taskStation,
+  shuffle,
+  type TaskOpMsg,
+  type TasksMsg,
   type AckMsg,
   type HideSpot,
   type ActionMsg,
@@ -94,6 +99,11 @@ export class Match {
   readonly totalInnocents: number;
   readonly killersCount: number;
   readonly needed: number;
+  /** tarefas de inocentes concluídas / necessárias */
+  tasksDone = 0;
+  readonly tasksNeeded: number;
+  /** bits dos lampiões acesos pelas tarefas */
+  lampsMask = 0;
 
   private readonly clock: () => number;
   private readonly rnd: () => number;
@@ -147,6 +157,8 @@ export class Match {
         lastBudgetAt: now,
         lastMoveAt: now,
         lastChatAt: 0,
+        tasks: [],
+        taskActive: null,
       };
       p.role = createRole(roles[i], p, this);
       p.role.init(this.revealEndsAt);
@@ -158,6 +170,7 @@ export class Match {
     this.killersCount = all.filter((p) => p.role.isKiller).length;
     this.totalInnocents = all.length - this.killersCount;
     this.needed = killsNeeded(this.totalInnocents);
+    this.tasksNeeded = this.assignTasks(all);
 
     this.log.add(
       'match_start',
@@ -233,6 +246,104 @@ export class Match {
       totalInnocents: this.totalInnocents,
       killsNeeded: this.needed,
     };
+  }
+
+  // ------------------------------------------------------------------ tarefas
+
+  /** Sorteia as tarefas. Lampiões não se repetem entre inocentes. Devolve quantas a vila precisa. */
+  private assignTasks(all: ServerPlayer[]): number {
+    const n = Math.min(CONFIG.tasks.perPlayer, TASK_STATIONS.length);
+    const takenLamps = new Set<string>();
+    let total = 0;
+    for (const p of all) {
+      const pool = shuffle(TASK_STATIONS.map((t) => t.id), this.rnd);
+      const pick: string[] = [];
+      for (const id of pool) {
+        if (pick.length >= n) break;
+        const st = taskStation(id)!;
+        const lamp = st.visual && 'lamp' in st.visual;
+        if (lamp && !p.role.isKiller) {
+          if (takenLamps.has(id)) continue;
+          takenLamps.add(id);
+        }
+        pick.push(id);
+      }
+      p.tasks = pick.map((id) => ({ id, done: false }));
+      if (!p.role.isKiller) total += pick.length;
+    }
+    return Math.max(1, Math.ceil(total * CONFIG.tasks.villageGoal));
+  }
+
+  tasksMessage(p: ServerPlayer): TasksMsg {
+    return { list: p.tasks.map((t) => ({ ...t })), fake: p.role.isKiller, active: p.taskActive?.id ?? null };
+  }
+
+  sendTasks(p: ServerPlayer): void {
+    if (!p.isBot) this.io.send(p, S2C.tasks, this.tasksMessage(p));
+  }
+
+  /** Começar / concluir / cancelar uma tarefa. Mesma validação para humanos e bots. */
+  taskOp(p: ServerPlayer, msg: TaskOpMsg): ActionResult {
+    const res = this.taskOpInner(p, msg);
+    if (!p.isBot) {
+      if (!res.ok) this.toast(p, res.error, 'error');
+      this.sendTasks(p);
+    }
+    return res;
+  }
+
+  private taskOpInner(p: ServerPlayer, msg: TaskOpMsg): ActionResult {
+    if (!msg || typeof msg.id !== 'string') return fail('Tarefa inválida.');
+    if (msg.op === 'cancel') {
+      p.taskActive = null;
+      return ok();
+    }
+    if (this.phase !== 'playing' || !p.alive) return fail('Agora não dá.');
+    const st = taskStation(msg.id);
+    const mine = p.tasks.find((t) => t.id === msg.id);
+    if (!st || !mine) return fail('Essa tarefa não é sua.');
+    if (mine.done) return fail('Você já fez essa tarefa.');
+    if (Math.hypot(p.x - st.x, p.z - st.z) > CONFIG.tasks.radius + CONFIG.net.lagToleranceMeters) return fail('Chegue mais perto.');
+    const now = this.now();
+    if (msg.op === 'start') {
+      if (p.frozenUntil > now) return fail('Você está algemado.');
+      p.taskActive = { id: st.id, startedAt: now };
+      this.stop(p);
+      return ok();
+    }
+    if (msg.op !== 'finish') return fail('Tarefa inválida.');
+    if (!p.taskActive || p.taskActive.id !== st.id) return fail('Comece a tarefa primeiro.');
+    if (now - p.taskActive.startedAt < st.seconds * 1000 * CONFIG.tasks.minTimeFactor) return fail('Rápido demais...');
+    p.taskActive = null;
+    mine.done = true;
+    // assassino fingindo: parece concluída para ele, mas nada acontece no mundo
+    if (p.role.isKiller) {
+      this.log.add('task_fake', { actor: p, task: st.id }, now);
+      return ok();
+    }
+    this.tasksDone++;
+    this.log.add('task_done', { actor: p, task: st.id, done: this.tasksDone, needed: this.tasksNeeded }, now);
+    if (st.visual && 'lamp' in st.visual) {
+      this.lampsMask |= 1 << st.visual.lamp;
+      this.fx({ kind: 'lamp', x: st.x, z: st.z });
+    } else if (st.visual && 'bell' in st.visual) {
+      this.fx({ kind: 'bell', x: st.x, z: st.z });
+      this.note(`${p.name} tocou o sino da igreja`);
+    }
+    this.checkWin();
+    return ok();
+  }
+
+  /** Cancela a tarefa se o jogador se afastou, morreu ou foi algemado. */
+  private watchTask(p: ServerPlayer, now: number): void {
+    const a = p.taskActive;
+    if (!a) return;
+    const st = taskStation(a.id);
+    const away = !st || Math.hypot(p.x - st.x, p.z - st.z) > CONFIG.tasks.radius + CONFIG.net.lagToleranceMeters + 0.4;
+    if (!p.alive || away || p.frozenUntil > now || this.phase !== 'playing') {
+      p.taskActive = null;
+      this.sendTasks(p);
+    }
   }
 
   applyInput(p: ServerPlayer, msg: InputMsg): void {
@@ -523,6 +634,7 @@ export class Match {
     }
     for (const p of this.players.values()) {
       p.role.tick(now);
+      this.watchTask(p, now);
       if (p.bot && this.phase === 'playing') p.bot.update(p, this, dtSec, now);
       if (p.moving && now - p.lastMoveAt > 200) p.moving = 0;
     }
@@ -564,6 +676,7 @@ export class Match {
       if (p.frozenUntil > now) f |= EF.FROZEN;
       if (ally) f |= EF.ALLY;
       if (spot) f |= EF.HIDDEN;
+      if (p.taskActive) f |= EF.TASK;
       const ent: EntitySnap = {
         id: p.netId,
         n: look && !look.hideName ? look.name : p.name,
@@ -620,6 +733,9 @@ export class Match {
         deadInnocents,
         killsNeeded: this.needed,
         killers: this.killersCount,
+        tasksDone: this.tasksDone,
+        tasksNeeded: this.tasksNeeded,
+        lamps: this.lampsMask,
       },
     };
   }
@@ -659,6 +775,10 @@ export class Match {
     );
     if (killersLeft.length === 0) {
       this.end('inocentes', 'Todos os assassinos foram eliminados ou presos.');
+      return;
+    }
+    if (this.tasksDone >= this.tasksNeeded) {
+      this.end('inocentes', 'A vila terminou as tarefas: os lampiões acesos e o sino espantaram o mal.');
     }
   }
 

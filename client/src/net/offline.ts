@@ -5,7 +5,7 @@
  */
 import { BOT_NAMES } from '@nevoeiro/game/Bots';
 import { Match, type MatchIO } from '@nevoeiro/game/Match';
-import { C2S, CONFIG, S2C, SKINS, shuffle, type ActionMsg, type ChatSendMsg, type InputMsg } from '@nevoeiro/shared';
+import { C2S, CONFIG, S2C, SKINS, shuffle, type ActionMsg, type ChatSendMsg, type InputMsg, type TaskOpMsg } from '@nevoeiro/shared';
 import { applyRoomState, handleServerMessage, setOfflineSink } from './connection';
 import { resetNet } from './netState';
 import { getState, type LobbyPlayerView } from './store';
@@ -58,9 +58,12 @@ function begin() {
   applyRoomState(view('reveal'));
   const self = match.bySession(LOCAL_ID)!;
   handleServerMessage(S2C.role, match.roleMessage(self));
+  match.sendTasks(self);
   getState().set({
     voice: { ...getState().voice, status: 'unavailable', channel: null, reason: 'Modo offline: sem chat de voz.' },
   });
+  // depuração (só em desenvolvimento): acesso à partida local pelo console
+  if (import.meta.env.DEV) Object.assign(window, { __nevoeiroMatch: match });
   const dt = 1 / CONFIG.net.tickRate;
   timer = setInterval(() => match?.tick(dt), dt * 1000);
 }
@@ -85,6 +88,9 @@ function onClientMessage(type: string, msg: unknown) {
       break;
     case C2S.action:
       if (self) match!.handleAction(self, msg as ActionMsg);
+      break;
+    case C2S.task:
+      if (self) match!.taskOp(self, msg as TaskOpMsg);
       break;
     case C2S.chat: {
       const c = msg as ChatSendMsg;

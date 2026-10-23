@@ -26,7 +26,7 @@ export function modelUrlFor(skinId: string): string | undefined {
   return entries.find(([k]) => /\/default\.(glb|gltf)$/.test(k))?.[1];
 }
 
-export type AnimState = 'idle' | 'walk' | 'run' | 'death' | 'ability';
+export type AnimState = 'idle' | 'walk' | 'run' | 'death' | 'ability' | 'task';
 
 export interface Motion {
   speed: number;
@@ -203,6 +203,7 @@ const CLIP_PATTERNS: Record<AnimState, RegExp> = {
   run: /run|correr/i,
   death: /death|die|dying|morrer|morte/i,
   ability: /ability|cast|habilidade|skill/i,
+  task: /task|work|interact|tarefa|trabalh/i,
 };
 
 function GltfCharacter({ url, motion, ghost, hidden, dead }: Props & { url: string }) {
