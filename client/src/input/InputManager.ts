@@ -34,6 +34,17 @@ export function setKeyBlocker(fn: () => boolean) {
   blockKeys = fn;
 }
 
+let taskMode: () => boolean = () => false;
+/** O jogo informa quando um minijogo de tarefa está aberto (botões do controle viram teclas dele). */
+export function setTaskMode(fn: () => boolean) {
+  taskMode = fn;
+}
+
+/** Simula uma tecla (o minijogo escuta o teclado). */
+function fakeKey(type: 'keydown' | 'keyup', code: string) {
+  window.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true }));
+}
+
 const isTyping = () => {
   const el = document.activeElement as HTMLElement | null;
   return blockKeys() || (!!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable));
@@ -172,6 +183,19 @@ class InputManager {
     const edge = (i: number) => b[i] && !this.padPrev[i];
     const release = (i: number) => !b[i] && this.padPrev[i];
     if (b[10] || (pad.buttons[7]?.value ?? 0) > 0.5) out.run = true; // L3 ou RT = correr
+    if (taskMode()) {
+      // minijogo: X segura/aperta (Espaço); A, B, X, Y = símbolos 1 a 4
+      if (edge(2)) fakeKey('keydown', 'Space');
+      if (release(2)) fakeKey('keyup', 'Space');
+      ([0, 1, 2, 3] as const).forEach((i) => {
+        if (edge(i)) fakeKey('keydown', `Digit${i + 1}`);
+        if (release(i)) fakeKey('keyup', `Digit${i + 1}`);
+      });
+      if (edge(9)) this.emit('escape'); // Start sai da tarefa
+      this.padPrev = b;
+      return;
+    }
+    if (edge(2)) this.emit('task'); // X
     if (edge(0)) this.emit('ability0'); // A
     if (edge(1)) this.emit('ability1'); // B
     if (edge(3)) this.emit('map'); // Y

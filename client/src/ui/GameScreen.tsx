@@ -3,7 +3,7 @@ import { triggerAbility } from '../game/abilities';
 import { cancelTask, openTask } from '../game/tasks';
 import { resetCooldownWatch } from '../game/feedback';
 import { GameCanvas } from '../game/GameCanvas';
-import { input, setKeyBlocker } from '../input/InputManager';
+import { input, setKeyBlocker, setTaskMode } from '../input/InputManager';
 import { getState, useStore } from '../net/store';
 import { voice } from '../voice/VoiceManager';
 import { Hud } from './Hud';
@@ -21,6 +21,7 @@ export function GameScreen() {
     input.start();
     resetCooldownWatch();
     setKeyBlocker(() => getState().chatOpen);
+    setTaskMode(() => !!getState().taskOpen);
     const onLock = () => getState().set({ pointerLocked: !!document.pointerLockElement });
     document.addEventListener('pointerlockchange', onLock);
     const off = input.on((a) => {

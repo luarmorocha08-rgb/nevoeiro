@@ -12,7 +12,7 @@ import { Suspense, useEffect, useMemo, useRef, type MutableRefObject } from 'rea
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
 import { getSkin, type SkinDef } from '@nevoeiro/shared';
-import { RIG, animateRig, createRigState, type Rig, type RigState } from './rig';
+import { RIG, animateRig, createRigState, poseDead, type Rig, type RigState } from './rig';
 
 const MODEL_URLS = import.meta.glob('/assets/characters/*.{glb,gltf}', {
   eager: true,
@@ -154,16 +154,23 @@ function CapsuleCharacter({ skin: skinId, motion, ghost = false, hidden = false,
     ankleR: useRef<THREE.Group>(null),
   };
   const state = useRef<RigState>(createRigState());
+  const posedDead = useRef(false);
   const rig = useRef<Rig | null>(null);
 
   useFrame((_, dt) => {
     const mo = motion?.current;
     uniforms.uDissolve.value = mo?.dissolve ?? 0;
     if (mo?.edge) uniforms.uEdge.value.set(mo.edge);
-    if (dead) return;
     if (!rig.current) {
       if (!g.root.current) return;
       rig.current = Object.fromEntries(Object.entries(g).map(([k, r]) => [k, r.current])) as unknown as Rig;
+    }
+    if (dead) {
+      if (!posedDead.current) {
+        posedDead.current = true;
+        poseDead(rig.current, skinId);
+      }
+      return;
     }
     animateRig(rig.current, state.current, { task: mo?.state === 'task', tired: !!mo?.tired, speed: mo?.speed }, dt);
   });

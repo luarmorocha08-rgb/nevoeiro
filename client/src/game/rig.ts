@@ -231,3 +231,19 @@ export function animateRig(rig: Rig, s: RigState, input: RigInput, rawDt: number
   rig.head.rotation.x = -s.lean * 0.65 + s.taskW * 0.45 + bobAmp * Math.cos(2 * p) * 1.5;
   rig.head.rotation.z = -rig.spine.rotation.z * 0.5;
 }
+
+/** Pose largada do corpo caído (variação estável por skin). */
+export function poseDead(rig: Rig, seed: string): void {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  const v = (k: number) => (((h >> k) & 255) / 255) * 2 - 1;
+  rig.shoulderL.rotation.set(-0.3 + v(1) * 0.3, 0, -0.9 - v(2) * 0.4);
+  rig.shoulderR.rotation.set(-0.2 + v(3) * 0.3, 0, 1.1 + v(4) * 0.4);
+  rig.elbowL.rotation.x = -0.4 - Math.abs(v(5)) * 0.5;
+  rig.elbowR.rotation.x = -0.2;
+  rig.hipL.rotation.set(-0.15, 0, -0.18);
+  rig.hipR.rotation.set(-0.5 - Math.abs(v(6)) * 0.3, 0, 0.12);
+  rig.kneeR.rotation.x = 0.7 + Math.abs(v(7)) * 0.3;
+  rig.kneeL.rotation.x = 0.1;
+  rig.head.rotation.set(0.15, 0.5 * Math.sign(v(8) || 1), 0);
+}

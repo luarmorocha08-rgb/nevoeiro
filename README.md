@@ -120,6 +120,7 @@ Variáveis de ambiente: copie `server/.env.example` → `server/.env` e `client/
 | Câmera | mouse (clique na tela trava o cursor; Esc solta) · botão direito arrasta | arrastar no lado direito | analógico direito |
 | Correr (gasta stamina) | Shift (Caps Lock alterna) | botão de corrida (ou joystick no máximo) | RT / L3 |
 | Habilidade 1 / 2 | Q / E | botões redondos | A / B |
+| Fazer tarefa | F (no minijogo: Espaço / 1‑4, Esc sai) | botão da tarefa | X (no minijogo: X / A‑B‑X‑Y, Start sai) |
 | Chat | Enter (ou T) | botão 💬 | Select |
 | Mapa | M | minimapa / 🗺 | Y |
 | Mutar microfone | N | botão 🎙 | — |
@@ -143,8 +144,25 @@ alvo — exceto por parceiros assassinos, por quem está no mesmo esconderijo e 
 **Feedback:** toda ação confirmada pelo servidor tem som, vibração no celular e um texto curto; erros
 têm som e vibração dupla; quando uma habilidade sai da recarga, o botão pulsa e toca um aviso.
 
-**Tutorial:** na primeira partida aparecem 4 cartões curtos (controles, sua habilidade, chat e
-esconderijos). Para ver de novo, apague `nevoeiro.tutorial.v1` do armazenamento do navegador.
+**Tarefas da vila:** cada jogador recebe 5 tarefas espalhadas pelo mapa (losangos dourados no chão,
+no minimapa e um feixe de luz fraco que atravessa a névoa). Chegue perto e aperte **F** para abrir um
+minijogo curto: **segurar** (encher o balde, acender o lampião, limpar o túmulo, acender a lareira),
+**acertar o tempo** (tocar o sino, colher ervas, consertar a cerca) ou **repetir a sequência** (barris,
+arquivos, feno). Enquanto faz a tarefa você fica parado — e os outros veem você trabalhando.
+Barra da vila cheia = **vitória dos inocentes**. Assassinos recebem **tarefas falsas** para se misturar:
+a animação é igual, mas nada acontece. As tarefas **visuais** provam inocência: o lampião acende para
+todos verem e o sino toca para a vila inteira (e afina a névoa por alguns segundos) — um assassino
+"fazendo" a mesma tarefa não acende nem toca nada. Estações e tempos: `shared/src/tasks.ts`;
+números: `CONFIG.tasks`.
+
+**Animação:** o personagem tem quadril, coluna, joelhos, cotovelos e tornozelos animados por código:
+a passada avança pela distância percorrida (o pé não patina), andar e correr se misturam pela
+velocidade (correndo: joelhos sobem, cotovelos dobram, tronco inclina), há inclinação nas curvas e ao
+acelerar, postura curvada quando a stamina acaba, respiração e olhar em volta parado e pose de tarefa.
+Para ver as animações isoladas em desenvolvimento: `npm run dev` e abra `/?anim`.
+
+**Tutorial:** na primeira partida aparecem 5 cartões curtos (controles, sua habilidade, tarefas, chat e
+esconderijos). Para ver de novo, apague `nevoeiro.tutorial.v2` do armazenamento do navegador.
 
 Em **Configurações**: qualidade gráfica (baixa/média/alta/automática), sensibilidade, volumes (geral,
 trilha e ambiente), inverter eixo, **modo para daltônicos**, vibração, **mostrar FPS** e servidor.
@@ -156,7 +174,8 @@ trilha e ambiente), inverter eixo, **modo para daltônicos**, vibração, **most
 | Resolução (DPR) | 0,6–0,9 | 0,9–1,25 | 1–2 |
 | Sombras (só a lua) | — | PCF 1024 | suaves 2048 |
 | Pós‑processamento | só o filtro térmico quando ativo | bloom, vinheta, grão de filme, ACES | + SSAO (N8AO) e SMAA |
-| Camadas de neblina animada | — | 2 | 3 |
+| Véus de névoa | 6 | 16 | 28 |
+| Tufos de grama com vento | — | 2.600 | 6.500 |
 | Vagalumes / poeira / folhas | 10 / — / — | 30 / 60 / 40 | 60 / 140 / 90 |
 | Fumaça das chaminés / estrelas | — | sim | sim |
 | Luzes quentes pontuais | 3 | 5 | 8 |
@@ -164,8 +183,20 @@ trilha e ambiente), inverter eixo, **modo para daltônicos**, vibração, **most
 - **Automática de verdade:** começa pela heurística do aparelho, **mede o FPS nos primeiros 10 s** de
   partida (após 2 s de aquecimento) e sobe/desce um nível (limiares em `CONFIG.graphics.autoQuality`).
   O resultado fica salvo para as próximas partidas.
-- **Neblina por área:** `FogExp2` com densidade que muda suavemente por local (`CONFIG.graphics.fogZones`:
-  floresta e cemitério mais densos, praça mais leve) + camadas animadas na cor `#8A97B0`.
+- **Névoa (em todos os níveis):** shader próprio no lugar da neblina do three.js
+  (`client/src/game/fog.ts`): **névoa de altura** — densa rente ao chão e rala no alto, então telhados e
+  copas surgem acima dela —, **manchas que andam com o vento** (ruído no mundo, nada grudado na tela),
+  cor mais clara na direção da lua e corte suave no horizonte. A densidade muda por área
+  (`CONFIG.graphics.fogZones`: floresta e cemitério mais densos, praça mais leve), afina dentro de
+  casa, com os óculos térmicos e quando o sino toca. **Véus** (cortinas verticais suaves) passam
+  devagar ao redor do jogador, e o **céu** (gradiente, lua com halo, nuvens finas e estrelas) usa a
+  mesma cor da névoa no horizonte — sem emenda. Ajustes em `CONFIG.graphics.fog` e `.veils`.
+- **Cenário procedural (sem arquivos de imagem):** chão que mistura grama, musgo e terra, praça de
+  paralelepípedos, estradas de terra, casas com enxaimel, alicerce de pedra, molduras e cruz nas
+  janelas, verga na porta e telhado de telhas com cumeeira; igreja de pedra com contrafortes e
+  campanário; pinheiros em camadas (as copas somem em pontilhado quando a câmera encosta nelas);
+  lampiões com halo e cone de luz na névoa; poço, fonte e lápides de pedra. As texturas usam
+  coordenadas do mundo (não esticam em paredes longas). Código em `client/src/game/scenery.ts`.
 - **Iluminação:** luar frio direcional (`#A9C4FF`) com sombras; lampiões e janelas quentes (`#F2A65A`)
   com chama tremulando; um número fixo de luzes pontuais é redistribuído para os lampiões mais próximos
   (sem recompilar shaders).
@@ -191,6 +222,9 @@ O servidor imprime, ao fim de cada partida, o tempo médio e a taxa de vitória 
 npm run balance -w server            # 12 partidas por tamanho de sala (10 a 16)
 npm run balance -w server -- 30      # 30 por tamanho
 ```
+
+Com as tarefas, 210 partidas simuladas só com bots ficaram em **52% assassinos × 48% inocentes**
+(duração média ~4 min com bots; humanos demoram mais). Antes das tarefas os assassinos venciam ~98%.
 
 ---
 
@@ -373,7 +407,8 @@ Todos os números estão em `shared/src/config.ts`.
 **Vitória**
 - Assassinos: quando **50%** dos inocentes (civis contam) estão mortos.
 - Inocentes: quando todos os assassinos foram **eliminados pelo Xerife** ou **presos pelo Detetive**
-  (um Zumbi aguardando o retorno ainda conta como vivo).
+  (um Zumbi aguardando o retorno ainda conta como vivo) **ou** quando a vila conclui **80%** das tarefas
+  dos inocentes (`CONFIG.tasks.villageGoal`). Morto não faz tarefa: cada morte deixa a meta mais difícil.
 
 **Assassinos** (todos têm MATAR — alcance 2,2 m, recarga 25 s)
 | Papel | Habilidade |
