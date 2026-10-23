@@ -12,7 +12,8 @@ export type InputAction =
   | 'pttUp'
   | 'escape'
   | 'role'
-  | 'task';
+  | 'task'
+  | 'notebook';
 
 export interface InputSample {
   /** -1..1 (direita positiva) */
@@ -120,6 +121,9 @@ class InputManager {
       case 'Digit3':
         this.emit('task');
         break;
+      case 'KeyJ':
+        this.emit('notebook');
+        break;
       case 'Enter':
       case 'KeyT':
         e.preventDefault();
@@ -196,6 +200,7 @@ class InputManager {
       return;
     }
     if (edge(2)) this.emit('task'); // X
+    if (edge(14)) this.emit('notebook'); // direcional esquerdo
     if (edge(0)) this.emit('ability0'); // A
     if (edge(1)) this.emit('ability1'); // B
     if (edge(3)) this.emit('map'); // Y

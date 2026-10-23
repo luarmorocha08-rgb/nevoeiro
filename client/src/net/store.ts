@@ -13,6 +13,7 @@ import type {
   YouSnap,
 } from '@nevoeiro/shared';
 import { loadAutoQuality, loadSettings, saveSettings, type Settings } from '../quality';
+import type { Clue, Mark } from '../game/clues';
 
 export interface LobbyPlayerView {
   id: string;
@@ -125,6 +126,16 @@ interface State {
   taskOpen: string | null;
   /** lista de tarefas recolhida */
   tasksCollapsed: boolean;
+  /** Date.now() de quando a partida começou (relógio do caderno) */
+  playingSince: number;
+  /** caderno de pistas */
+  clues: Clue[];
+  cluesUnread: number;
+  notebookOpen: boolean;
+  /** marcas de suspeita pelo nome que você vê */
+  marks: Record<string, Mark>;
+  /** pessoas que você já viu nesta partida (nome → skin) */
+  people: Record<string, string>;
 }
 
 interface Actions {
@@ -184,6 +195,12 @@ export const useStore = create<State & Actions>((set, get) => ({
   taskNear: null,
   taskOpen: null,
   tasksCollapsed: false,
+  playingSince: 0,
+  clues: [],
+  cluesUnread: 0,
+  notebookOpen: false,
+  marks: {},
+  people: {},
 
   set: (p) => set(p),
 
@@ -246,6 +263,12 @@ export const useStore = create<State & Actions>((set, get) => ({
       tasks: null,
       taskNear: null,
       taskOpen: null,
+      playingSince: 0,
+      clues: [],
+      cluesUnread: 0,
+      notebookOpen: false,
+      marks: {},
+      people: {},
     }),
 }));
 

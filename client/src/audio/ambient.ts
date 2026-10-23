@@ -90,10 +90,12 @@ class AmbientAudio {
     const music = playing ? S.musicVolume * S.masterVolume * CONFIG.audio.musicVolume : 0;
     this.drone!.gain.setTargetAtTime((0.03 + this.tension * 0.22) * music, now, 0.5);
     this.droneFilter!.frequency.setTargetAtTime(180 + this.tension * 900, now, 0.5);
-    // batida de coração quando a tensão é alta
-    if (this.tension > 0.45 && now > this.nextBeat && music > 0) {
+    net.feel.tension = this.tension;
+    // batida de coração quando a tensão é alta (a tela pulsa junto, mesmo sem música)
+    if (this.tension > 0.45 && now > this.nextBeat) {
       this.nextBeat = now + 1.05 - this.tension * 0.45;
-      this.heartbeat(music * this.tension);
+      net.feel.beatAt = performance.now();
+      if (music > 0) this.heartbeat(music * this.tension);
     }
 
     if (!playing || amb <= 0.01) return;

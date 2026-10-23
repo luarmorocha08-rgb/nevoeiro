@@ -137,6 +137,28 @@ export const CONFIG = {
     },
   },
 
+  /** "Game feel": câmera, pegadas, lanterna e caderno de pistas (só cliente). */
+  feel: {
+    /** tremor da câmera por eventos próximos (some até este raio, m) */
+    shakeRadius: 22,
+    shakeShot: 0.55,
+    shakeKill: 0.4,
+    shakeTeleport: 0.25,
+    /** campo de visão extra correndo (graus) */
+    runFovBoost: 6,
+    /** balanço da cabeça (m) andando / correndo */
+    bobWalk: 0.03,
+    bobRun: 0.07,
+    /** pegadas: duração (s) e quantas ficam no chão ao mesmo tempo */
+    footprintSeconds: 9,
+    footprintMax: 180,
+    /** lanterna fraca que cada um leva (só ilumina perto) */
+    lanternIntensity: 2.6,
+    lanternDistance: 7.5,
+    /** caderno de pistas: quem estava a até este raio (m) de uma morte é anotado */
+    clueNearbyRadius: 16,
+  },
+
   /** Tarefas da vila (estações em /shared/src/tasks.ts). */
   tasks: {
     /** Tarefas sorteadas para cada jogador (assassinos recebem o mesmo número, falsas). */

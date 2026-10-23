@@ -63,6 +63,10 @@ export function SettingsModal() {
           <span>Modo para daltônicos (formas, padrões e rótulos além da cor)</span>
         </label>
         <label className="field row">
+          <input type="checkbox" checked={settings.cameraMotion} onChange={(e) => update({ cameraMotion: e.target.checked })} />
+          <span>Movimento de câmera (balanço ao correr, tremor e zoom) — desligue se enjoar</span>
+        </label>
+        <label className="field row">
           <input type="checkbox" checked={settings.vibration} onChange={(e) => update({ vibration: e.target.checked })} />
           <span>Vibrar no celular ao agir</span>
         </label>

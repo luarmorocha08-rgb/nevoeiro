@@ -20,11 +20,13 @@ import {
   type TaskOpMsg,
   type VoiceTokenMsg,
   CONFIG,
+  locationAt,
 } from '@nevoeiro/shared';
 import { sfx } from '../audio/sfx';
+import { addClue, namesNear } from '../game/clues';
 import { onActionAck } from '../game/feedback';
 import { voice } from '../voice/VoiceManager';
-import { applySnapshot, net, pushFx, resetNet } from './netState';
+import { addShake, applySnapshot, net, pushFx, resetNet } from './netState';
 import { getState, type LobbyPlayerView } from './store';
 
 const TOKEN_KEY = 'nevoeiro.reconnect';
@@ -191,6 +193,7 @@ export function applyRoomState(view: RoomStateView) {
     patch.screen = 'game';
     if (view.phase === 'reveal' && prevPhase !== 'reveal') patch.showRole = true;
     if (view.phase === 'playing' && prevPhase === 'reveal') patch.showRole = false;
+    if (view.phase === 'playing' && !getState().playingSince) patch.playingSince = Date.now();
   }
   getState().set(patch);
 }
@@ -205,10 +208,14 @@ export function handleServerMessage(type: string, m: any) {
     case S2C.snap:
       applySnapshot(m as SnapshotMsg);
       break;
-    case S2C.alert:
-      getState().pushAlert(m as AlertMsg);
-      sfx.play((m as AlertMsg).kind === 'revive' ? 'revive' : 'alert');
+    case S2C.alert: {
+      const a = m as AlertMsg;
+      getState().pushAlert(a);
+      // caderno: anota com local e quem você via por perto
+      addClue(a.kind, a.text, namesNear(a.x, a.z));
+      sfx.play(a.kind === 'revive' ? 'revive' : 'alert');
       break;
+    }
     case S2C.chat:
       getState().pushChat(m as ChatMsg);
       sfx.play('chat');
@@ -233,14 +240,25 @@ export function handleServerMessage(type: string, m: any) {
     case S2C.toast:
       getState().pushToast(m as ToastMsg);
       break;
-    case S2C.examine:
-      getState().set({ examine: m as ExamineMsg });
+    case S2C.examine: {
+      const ex = m as ExamineMsg;
+      getState().set({ examine: ex });
+      const ago = ex.secondsAgo >= 60 ? `${Math.floor(ex.secondsAgo / 60)}min ${ex.secondsAgo % 60}s` : `${ex.secondsAgo}s`;
+      addClue('examine', `Exame de ${ex.victimName}: morreu há ${ago} — ${ex.location}. Causa: ${ex.killer}.`);
       break;
+    }
     case S2C.fx: {
       const f = m as FxMsg;
       pushFx(f);
       // som 3D: volume e lado conforme a posição do evento
       const pos = { x: f.x, z: f.z };
+      // tremor de câmera pelos eventos fortes por perto
+      const near = Math.max(0, 1 - Math.hypot(f.x - net.local.x, f.z - net.local.z) / CONFIG.feel.shakeRadius);
+      if (near > 0) {
+        if (f.kind === 'shot') addShake(CONFIG.feel.shakeShot * near);
+        else if (f.kind === 'kill') addShake(CONFIG.feel.shakeKill * near);
+        else if (f.kind === 'teleport-in' || f.kind === 'bell') addShake(CONFIG.feel.shakeTeleport * near);
+      }
       if (f.kind === 'shot') sfx.play('shot', 1, pos);
       else if (f.kind.startsWith('teleport')) sfx.play('teleport', 0.8, pos);
       else if (f.kind === 'kill') sfx.play('kill', 0.8, pos);
@@ -248,9 +266,13 @@ export function handleServerMessage(type: string, m: any) {
       else if (f.kind === 'morph') sfx.play('morph', 0.6, pos);
       else if (f.kind === 'cuff') sfx.play('cuff', 0.8, pos);
       else if (f.kind === 'zombie') sfx.play('vanish', 0.8, pos);
-      else if (f.kind === 'lamp') sfx.play('lamp', 1, pos);
-      else if (f.kind === 'bell') {
+      else if (f.kind === 'lamp') {
+        sfx.play('lamp', 1, pos);
+        const who = namesNear(f.x, f.z, 3.5);
+        addClue('lamp', `Um lampião acendeu — ${locationAt(f.x, f.z).name}.`, who);
+      } else if (f.kind === 'bell') {
         sfx.play('bell', 1.2, pos);
+        addClue('bell', 'O sino da igreja tocou (quem tocou é inocente).', namesNear(f.x, f.z, 3.5));
         net.bellUntil = performance.now() + CONFIG.tasks.bellFogSeconds * 1000;
       }
       break;

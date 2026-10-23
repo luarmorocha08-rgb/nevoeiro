@@ -95,6 +95,7 @@ function RemotePlayer({ view }: { view: EntityView }) {
           {showName && (
             <span className={`nametag-name${view.ally ? ' ally' : ''}`}>
               {view.ally && <span className="team-shape" aria-label="parceiro">◆</span>}
+              <MarkBadge name={view.name} />
               {view.name}
               {view.ally && <em> · parceiro</em>}
               {view.hidden && <em> · escondido</em>}
@@ -125,6 +126,13 @@ function Bubble({ id }: { id: string }) {
   return <div className="bubble">{bubble.text}</div>;
 }
 
+/** Marca de suspeita que VOCÊ deu (pelo nome que você vê). */
+function MarkBadge({ name }: { name: string }) {
+  const mark = useStore((s) => s.marks[name]);
+  if (!mark) return null;
+  return <span className={`mark-badge ${mark}`} aria-label={mark === 'suspeito' ? 'suspeito' : 'confiável'}>{mark === 'suspeito' ? '⚠' : '✓'}</span>;
+}
+
 function SpeakingIcon({ id }: { id: string }) {
   const speaking = useStore((s) => s.speaking.includes(id));
   return speaking ? <span className="speaking-icon" aria-label="falando">◉</span> : null;
@@ -133,6 +141,8 @@ function SpeakingIcon({ id }: { id: string }) {
 // ------------------------------------------------------------------ jogador local + câmera
 
 const INPUT_DT = 1 / CONFIG.net.inputRate;
+/** campo de visão padrão (o mesmo do <Canvas>) */
+export const BASE_FOV = 62;
 const CAM_DIST = 4.6;
 const MAX_STEPS_PER_FRAME = 8;
 // vetores reutilizados (nada de alocação por frame)
@@ -140,6 +150,7 @@ const camTarget = new THREE.Vector3();
 const camDesired = new THREE.Vector3();
 const camDir = new THREE.Vector3();
 const camFinal = new THREE.Vector3();
+const camLook = new THREE.Vector3();
 
 export function LocalPlayer() {
   const role = useStore((s) => s.role);
@@ -161,6 +172,10 @@ export function LocalPlayer() {
   const lastVersion = useRef(-1);
   const lastSentZero = useRef(false);
   const pulse = useRef({ start: 0, prevInvisible: false, prevSkin: '' });
+  const bobPhase = useRef(0);
+  // posição "limpa" da câmera (sem balanço/tremor, que são somados por cima a cada quadro)
+  const camBase = useRef(new THREE.Vector3());
+  const camBaseInit = useRef(false);
   const { camera } = useThree();
   const { world, rapier } = useRapier();
   const ray = useMemo(() => new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }), [rapier]);
@@ -310,9 +325,43 @@ export function LocalPlayer() {
     }
     camFinal.copy(camTarget).addScaledVector(camDir, dist);
     // aproxima rápido (não atravessa parede) e afasta devagar (sem trancos)
-    const closer = camera.position.distanceTo(camTarget) > dist + 0.05;
-    camera.position.lerp(camFinal, 1 - Math.exp(-dt * (closer ? 30 : 9)));
-    camera.lookAt(camTarget);
+    const base = camBase.current;
+    if (!camBaseInit.current) {
+      base.copy(camera.position);
+      camBaseInit.current = true;
+    }
+    const closer = base.distanceTo(camTarget) > dist + 0.05;
+    base.lerp(camFinal, 1 - Math.exp(-dt * (closer ? 30 : 9)));
+    camera.position.copy(base);
+    camLook.copy(camTarget);
+
+    // ---------- game feel: balanço da cabeça, tremor e zoom ao correr
+    const feel = net.feel;
+    feel.shake = Math.max(0, feel.shake - dt * 1.6);
+    const persp = camera as THREE.PerspectiveCamera;
+    let fovTarget = BASE_FOV;
+    if (st.settings.cameraMotion) {
+      const sp = motion.current.speed;
+      const runK = Math.max(0, Math.min(1, (sp - CONFIG.move.walkSpeed) / (CONFIG.move.runSpeed - CONFIG.move.walkSpeed)));
+      const walkK = Math.min(1, sp / CONFIG.move.walkSpeed);
+      const amp = CONFIG.feel.bobWalk * walkK + (CONFIG.feel.bobRun - CONFIG.feel.bobWalk) * runK;
+      bobPhase.current += dt * (sp / (runK > 0.5 ? CONFIG.audio.stepLengthRun : CONFIG.audio.stepLengthWalk)) * Math.PI;
+      const bob = Math.abs(Math.sin(bobPhase.current)) * amp;
+      const sway = Math.cos(bobPhase.current) * amp * 0.5;
+      // tremor: ruído rápido que decai; mais forte com tensão alta (mãos tremendo)
+      const sh = feel.shake * feel.shake * 0.35 + feel.tension * 0.012;
+      const t = nowP / 1000;
+      camera.position.x += Math.sin(t * 37) * sh + sway * Math.cos(c.yaw);
+      camera.position.y += Math.sin(t * 43 + 1.3) * sh + bob;
+      camera.position.z += Math.sin(t * 29 + 2.1) * sh - sway * Math.sin(c.yaw);
+      camLook.y += bob * 0.4;
+      fovTarget += CONFIG.feel.runFovBoost * runK + feel.tension * 2;
+    }
+    if (Math.abs(persp.fov - fovTarget) > 0.01) {
+      persp.fov += (fovTarget - persp.fov) * (1 - Math.exp(-dt * 4));
+      persp.updateProjectionMatrix();
+    }
+    camera.lookAt(camLook);
   });
 
   if (!myId) return null;
@@ -339,6 +388,45 @@ function shortAngle(a: number) {
   return a;
 }
 
+// ------------------------------------------------------------------ lanterna
+
+/**
+ * Lanterna fraca que você carrega: luz quente baixa, alcance curto (o resto é névoa).
+ * Fica sempre na cena (intensidade 0 quando morto) para não mudar a contagem de luzes
+ * e não recompilar shaders.
+ */
+export function Lantern() {
+  const light = useRef<THREE.PointLight>(null);
+  useFrame(({ clock }) => {
+    const l = light.current;
+    if (!l) return;
+    const you = net.you;
+    const on = !!you?.alive && !you.invisible && !getState().end;
+    const t = clock.elapsedTime;
+    const flicker = 1 + Math.sin(t * 9.3) * 0.05 + Math.sin(t * 23.1) * 0.03;
+    const target = on ? CONFIG.feel.lanternIntensity * flicker : 0;
+    l.intensity += (target - l.intensity) * 0.2;
+    // um pouco à frente e ao lado, na altura da mão
+    const fx = Math.sin(net.local.yaw);
+    const fz = Math.cos(net.local.yaw);
+    l.position.set(net.local.x + fx * 0.9 + fz * 0.35, 1.5, net.local.z + fz * 0.9 - fx * 0.35);
+  });
+  return <pointLight ref={light} color={THEME.warmLight} intensity={0} distance={CONFIG.feel.lanternDistance} decay={1.6} />;
+}
+
+/** Volta o campo de visão ao normal (morreu correndo, fim de partida). */
+function useResetFov(active: boolean) {
+  const { camera } = useThree();
+  useFrame((_, dt) => {
+    if (!active) return;
+    const c = camera as THREE.PerspectiveCamera;
+    if (Math.abs(c.fov - BASE_FOV) > 0.05) {
+      c.fov += (BASE_FOV - c.fov) * Math.min(1, dt * 4);
+      c.updateProjectionMatrix();
+    }
+  });
+}
+
 // ------------------------------------------------------------------ espectador
 
 const specLook = new THREE.Vector3();
@@ -350,6 +438,7 @@ export function SpectatorCamera() {
   const { camera } = useThree();
   const st = useRef({ yaw: 0, pitch: -0.4, init: false });
   const pos = useRef(new THREE.Vector3());
+  useResetFov(!alive && !ended);
 
   useFrame((_, rawDt) => {
     if (alive || ended) {
@@ -406,6 +495,7 @@ export function OrbitCamera({ active, center = [0, 0], radius = 26, height = 11,
 }) {
   const { camera } = useThree();
   const t = useRef(Math.random() * 10);
+  useResetFov(active);
   useFrame((_, dt) => {
     if (!active) return;
     t.current += dt * speed;

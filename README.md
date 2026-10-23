@@ -126,6 +126,7 @@ Variáveis de ambiente: copie `server/.env.example` → `server/.env` e `client/
 | Mutar microfone | N | botão 🎙 | — |
 | Apertar para falar | segure V (ative nas Configurações) | segure 🎙 | segure LB |
 | Ver seu papel | Tab | toque no nome do papel | Start |
+| Caderno de pistas | J | botão 📄 (topo direito) | direcional ← |
 | Espectador | WASD voa · Espaço/C sobe e desce | joystick | analógicos + direcional |
 
 O alvo das habilidades é escolhido automaticamente: o jogador (ou corpo) mais próximo **na direção
@@ -155,6 +156,17 @@ todos verem e o sino toca para a vila inteira (e afina a névoa por alguns segun
 "fazendo" a mesma tarefa não acende nem toca nada. Estações e tempos: `shared/src/tasks.ts`;
 números: `CONFIG.tasks`.
 
+**Caderno de pistas (J):** anota sozinho mortes, ressurreições e prisões (hora, local e **quem você
+via por perto**), exames do Detetive, o sino e os lampiões (com quem estava ao lado — prova de
+inocência). Dá para escrever anotações e marcar cada pessoa como ⚠ suspeita ou ✓ confiável (a marca
+aparece sobre a cabeça; vale para o nome que você vê, então não denuncia o Metamorfo disfarçado).
+
+**Clima e tensão:** pegadas que somem em 9 s (mais fundas correndo); lanterna fraca na mão;
+vinheta vermelha que pulsa com o coração quando um assassino está perto (só inocentes); balanço da
+câmera ao correr, campo de visão maior em disparada e tremor quando há tiro ou morte por perto
+(desligue em Configurações → *Movimento de câmera*). Plano completo com os porquês e trechos de
+código: [`docs/PLANO-GRAFICOS-E-JOGABILIDADE.md`](docs/PLANO-GRAFICOS-E-JOGABILIDADE.md).
+
 **Animação:** o personagem tem quadril, coluna, joelhos, cotovelos e tornozelos animados por código:
 a passada avança pela distância percorrida (o pé não patina), andar e correr se misturam pela
 velocidade (correndo: joelhos sobem, cotovelos dobram, tronco inclina), há inclinação nas curvas e ao
@@ -173,7 +185,7 @@ trilha e ambiente), inverter eixo, **modo para daltônicos**, vibração, **most
 |---|---|---|---|
 | Resolução (DPR) | 0,6–0,9 | 0,9–1,25 | 1–2 |
 | Sombras (só a lua) | — | PCF 1024 | suaves 2048 |
-| Pós‑processamento | só o filtro térmico quando ativo | bloom, vinheta, grão de filme, ACES | + SSAO (N8AO) e SMAA |
+| Pós‑processamento | só o filtro térmico quando ativo | bloom, gradação de cor de suspense, vinheta, grão de filme, ACES | + SSAO (N8AO) e SMAA |
 | Véus de névoa | 6 | 16 | 28 |
 | Tufos de grama com vento | — | 1.600 | 6.500 |
 | Vagalumes / poeira / folhas | 10 / — / — | 30 / 60 / 40 | 60 / 140 / 90 |

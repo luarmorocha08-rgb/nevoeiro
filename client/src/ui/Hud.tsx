@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CONFIG, ROLE_INFO } from '@nevoeiro/shared';
 import { voice } from '../voice/VoiceManager';
 import { net, serverNow } from '../net/netState';
@@ -14,6 +14,7 @@ import { RoleReveal } from './RoleReveal';
 import { TouchControls } from './TouchControls';
 import { Tutorial } from './Tutorial';
 import { TaskGame, TaskList, TaskPrompt, VillageProgress } from './Tasks';
+import { Notebook, NotebookButton } from './Notebook';
 
 export function Hud() {
   const touch = isTouchDevice();
@@ -28,6 +29,8 @@ export function Hud() {
 
   return (
     <div className={`hud${touch ? ' touch' : ''}`}>
+      {/* primeiro filho: fica atrás do resto do HUD (não escurece botões nem textos) */}
+      <TensionOverlay />
       {touch && !end && <TouchControls />}
       <TopBar />
       <Alerts />
@@ -36,9 +39,12 @@ export function Hud() {
         <div className="hud-right-top">
           <Minimap size={compact ? 112 : 168} />
           <VoiceWidget touch={touch} />
+          <div className="hud-btn-row">
+            <NotebookButton />
           <button className="round-btn gear-btn" aria-label="Configurações" title="Configurações" onClick={() => useStore.getState().set({ settingsOpen: true })}>
             <Icon name="gear" size={20} />
           </button>
+          </div>
         </div>
       )}
       {phase === 'playing' && !end && <TaskList compact={compact} />}
@@ -57,6 +63,7 @@ export function Hud() {
       {!touch && alive && phase === 'playing' && !end && <div className="crosshair" />}
       {phase === 'playing' && !end && <Tutorial touch={touch} />}
       {showFps && <FpsCounter />}
+      <Notebook />
       <MapOverlay />
       <RoleReveal />
       <EndScreen />
@@ -169,6 +176,29 @@ function ActionFeedback() {
       <Icon name={fb.action} size={18} /> {fb.text}
     </div>
   );
+}
+
+/**
+ * Vinheta vermelha que pulsa com o coração quando a tensão sobe (assassino perto ou morte
+ * recente — só inocentes vivos). Feita em CSS: funciona em qualquer qualidade gráfica.
+ */
+function TensionOverlay() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const el = ref.current;
+      if (!el) return;
+      const t = net.feel.tension;
+      const beat = Math.exp(-(performance.now() - net.feel.beatAt) / 260);
+      const v = t < 0.05 ? 0 : Math.min(0.9, t * (0.45 + beat * 0.55));
+      el.style.opacity = v.toFixed(3);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <div ref={ref} className="tension-overlay" aria-hidden />;
 }
 
 function StaminaBar() {

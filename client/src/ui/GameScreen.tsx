@@ -32,6 +32,10 @@ export function GameScreen() {
         case 'task':
           openTask();
           break;
+        case 'notebook':
+          st.set({ notebookOpen: !st.notebookOpen, cluesUnread: 0 });
+          if (!st.notebookOpen) document.exitPointerLock?.();
+          break;
         case 'ability0':
           triggerAbility(0);
           break;
@@ -62,6 +66,10 @@ export function GameScreen() {
         case 'escape':
           if (st.taskOpen) {
             cancelTask();
+            break;
+          }
+          if (st.notebookOpen) {
+            st.set({ notebookOpen: false });
             break;
           }
           st.set({ mapOpen: false, teleportPicking: false, showRole: st.phase === 'reveal', examine: null });

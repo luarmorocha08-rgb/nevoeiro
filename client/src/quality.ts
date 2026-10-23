@@ -19,6 +19,8 @@ export interface Settings {
   vibration: boolean;
   /** modo para daltônicos: formas e rótulos além da cor */
   colorblind: boolean;
+  /** balanço, tremor e zoom da câmera (desligue se enjoar) */
+  cameraMotion: boolean;
 }
 
 const KEY = 'nevoeiro.settings.v1';
@@ -37,6 +39,7 @@ const DEFAULTS: Settings = {
   ambientVolume: 0.7,
   vibration: true,
   colorblind: false,
+  cameraMotion: typeof window === 'undefined' || !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
 };
 
 export function loadSettings(): Settings {

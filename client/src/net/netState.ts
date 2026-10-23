@@ -57,7 +57,14 @@ export const net = {
   fxSeq: 0,
   /** sino tocado: a neblina afina até este performance.now() */
   bellUntil: 0,
+  /** "game feel": tensão suavizada (0..1), última batida do coração e tremor da câmera */
+  feel: { tension: 0, beatAt: 0, shake: 0 },
 };
+
+/** Tremor de câmera (soma e satura em 1; decai sozinho). */
+export function addShake(amount: number) {
+  net.feel.shake = Math.min(1, net.feel.shake + amount);
+}
 
 export function serverNow(): number {
   return Date.now() + net.offset;
@@ -139,6 +146,14 @@ export function applySnapshot(s: SnapshotMsg) {
   const patch: Record<string, unknown> = {};
   if (entityKey !== lastEntityKey) {
     lastEntityKey = entityKey;
+    // caderno: lembra de quem você já viu (nome como aparece para você)
+    let people: Record<string, string> | null = null;
+    for (const e of net.entities.values()) {
+      if (e.flags & EF.NONAME || st.people[e.name]) continue;
+      people ??= { ...st.people };
+      people[e.name] = e.skin;
+    }
+    if (people) patch.people = people;
     patch.entities = [...net.entities.values()].map<EntityView>((e) => ({
       id: e.id,
       name: e.name,
@@ -172,6 +187,8 @@ export function resetNet() {
   net.pending = [];
   net.fx = [];
   net.bellUntil = 0;
+  net.feel.tension = 0;
+  net.feel.shake = 0;
   lastEntityKey = '';
   lastBodyKey = '';
 }

@@ -14,9 +14,10 @@ import './fog';
 import { FogController, FogVeils, SkyDome } from './Atmosphere';
 import { MOON_DIR } from './fog';
 import { AmbientParticles, ChimneySmoke, FallingLeaves, FxLayer, TargetSystem, ThermalVision } from './Effects';
-import { LocalPlayer, OrbitCamera, RemotePlayers, SpectatorCamera } from './Players';
+import { Lantern, LocalPlayer, OrbitCamera, RemotePlayers, SpectatorCamera } from './Players';
 import { PostFx } from './PostFx';
 import { TaskMarkers } from './TaskMarkers';
+import { Footprints } from './Footprints';
 import { World } from './World';
 
 /** Luz da lua fria e direcional, que acompanha o jogador (sombras só onde importa). */
@@ -146,6 +147,7 @@ export function GameCanvas() {
           <Bodies />
         </Physics>
       </Suspense>
+      <Lantern />
       <SpectatorCamera />
       <OrbitCamera active={ended} radius={24} height={10} />
       <FogController lite={quality.lite} />
@@ -157,6 +159,7 @@ export function GameCanvas() {
       <FxLayer quality={quality} />
       <TargetSystem />
       <TaskMarkers />
+      <Footprints />
       <AudioSystem />
       <QualityGovernor level={level} />
       <PostFx quality={quality} />

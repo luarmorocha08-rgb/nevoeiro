@@ -1,6 +1,6 @@
 /**
  * Pós-processamento (@react-three/postprocessing):
- * - média: bloom sutil nas luzes, vinheta, grão de filme, tone mapping ACES
+ * - média: bloom sutil nas luzes, gradação de cor de suspense, vinheta, grão de filme, tone mapping ACES
  * - alta: + SSAO (N8AO) e SMAA
  * - qualquer qualidade: filtro térmico em tela cheia (azul → vermelho) do Rastreador, com transição
  */
@@ -10,6 +10,7 @@ import { BlendFunction, Effect, ToneMappingMode } from 'postprocessing';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { CONFIG } from '@nevoeiro/shared';
+import { net } from '../net/netState';
 import { useStore } from '../net/store';
 import type { QualityProfile } from '../quality';
 
@@ -50,7 +51,36 @@ class ThermalEffect extends Effect {
   }
 }
 
+// Gradação de cor de suspense: dessatura (mais com tensão), sombras azul-petróleo,
+// luzes âmbar e uma curva S leve de contraste. Roda depois do tone mapping.
+const GRADE_FRAG = /* glsl */ `
+uniform float tension;
+uniform float strength;
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  vec3 col = clamp(inputColor.rgb, 0.0, 1.0);
+  float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = mix(vec3(l), col, 0.84 - tension * 0.22);
+  vec3 tint = mix(vec3(0.86, 0.97, 1.10), vec3(1.08, 1.0, 0.88), smoothstep(0.06, 0.55, l));
+  col *= tint;
+  col = mix(col, col * col * (3.0 - 2.0 * col), 0.3);
+  outputColor = vec4(mix(inputColor.rgb, col, strength), inputColor.a);
+}`;
+
+class GradeEffect extends Effect {
+  constructor() {
+    super('GradeEffect', GRADE_FRAG, {
+      blendFunction: BlendFunction.NORMAL,
+      uniforms: new Map<string, THREE.Uniform>([
+        ['tension', new THREE.Uniform(0)],
+        ['strength', new THREE.Uniform(1)],
+      ]),
+    });
+  }
+}
+
 export function PostFx({ quality }: { quality: QualityProfile }) {
+  const grade = useMemo(() => new GradeEffect(), []);
+  useEffect(() => () => grade.dispose(), [grade]);
   const thermalOn = useStore((s) => s.you?.thermal ?? false);
   const thermal = useMemo(() => new ThermalEffect(), []);
   const level = useRef(0);
@@ -77,6 +107,9 @@ export function PostFx({ quality }: { quality: QualityProfile }) {
     if (Math.abs(level.current - target) < 0.002) level.current = target;
     thermal.uniforms.get('intensity')!.value = level.current;
     thermal.uniforms.get('time')!.value = clock.elapsedTime;
+    grade.uniforms.get('tension')!.value = net.feel.tension;
+    // óculos térmicos: sem gradação (o filtro tem a própria paleta)
+    grade.uniforms.get('strength')!.value = 1 - level.current;
     if (quality.post === 0) {
       const want = level.current > 0.001 || thermalOn;
       if (want !== composerOn) setComposerOn(want);
@@ -99,6 +132,7 @@ export function PostFx({ quality }: { quality: QualityProfile }) {
         <Bloom mipmapBlur levels={5} resolutionScale={0.5} intensity={G.bloomIntensity} luminanceThreshold={G.bloomThreshold} luminanceSmoothing={0.2} />
         <primitive object={thermal} />
         <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+        <primitive object={grade} />
         <Vignette offset={0.3} darkness={G.vignetteDarkness} />
         <Noise premultiply opacity={G.filmGrain} blendFunction={BlendFunction.SOFT_LIGHT} />
       </EffectComposer>
@@ -110,6 +144,7 @@ export function PostFx({ quality }: { quality: QualityProfile }) {
       <Bloom mipmapBlur levels={5} resolutionScale={0.5} intensity={G.bloomIntensity} luminanceThreshold={G.bloomThreshold} luminanceSmoothing={0.2} />
       <primitive object={thermal} />
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+      <primitive object={grade} />
       <Vignette offset={0.3} darkness={G.vignetteDarkness} />
       <Noise premultiply opacity={G.filmGrain} blendFunction={BlendFunction.SOFT_LIGHT} />
       <SMAA />
