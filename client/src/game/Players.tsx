@@ -231,6 +231,7 @@ export function LocalPlayer() {
     // fazendo tarefa: fica parado (o minijogo usa as teclas)
     const canMove = you.alive && you.frozen <= 0 && st.phase === 'playing' && !st.end && !st.taskOpen;
     motion.current.state = st.taskOpen ? 'task' : undefined;
+    motion.current.tired = sim.current.exhausted;
     acc.current += dt;
     let steps = 0;
     while (acc.current >= INPUT_DT && steps++ < MAX_STEPS_PER_FRAME) {

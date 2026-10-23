@@ -12,6 +12,7 @@ import { Suspense, useEffect, useMemo, useRef, type MutableRefObject } from 'rea
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
 import { getSkin, type SkinDef } from '@nevoeiro/shared';
+import { RIG, animateRig, createRigState, type Rig, type RigState } from './rig';
 
 const MODEL_URLS = import.meta.glob('/assets/characters/*.{glb,gltf}', {
   eager: true,
@@ -35,6 +36,8 @@ export interface Motion {
   dissolve?: number;
   /** cor da borda do dissolve */
   edge?: string;
+  /** cansado (stamina zerada): corpo curvado e respiração pesada */
+  tired?: boolean;
 }
 
 interface Props {
@@ -134,66 +137,116 @@ function useSkinMaterials(skin: SkinDef, ghost: boolean, hidden: boolean) {
 function CapsuleCharacter({ skin: skinId, motion, ghost = false, hidden = false, dead = false, castShadow = true, outline }: Props) {
   const skin = getSkin(skinId);
   const { mats: m, uniforms } = useSkinMaterials(skin, ghost, hidden);
-  const root = useRef<THREE.Group>(null);
-  const legL = useRef<THREE.Group>(null);
-  const legR = useRef<THREE.Group>(null);
-  const armL = useRef<THREE.Mesh>(null);
-  const armR = useRef<THREE.Mesh>(null);
-  const phase = useRef(Math.random() * 10);
+  const g = {
+    root: useRef<THREE.Group>(null),
+    pelvis: useRef<THREE.Group>(null),
+    spine: useRef<THREE.Group>(null),
+    head: useRef<THREE.Group>(null),
+    shoulderL: useRef<THREE.Group>(null),
+    shoulderR: useRef<THREE.Group>(null),
+    elbowL: useRef<THREE.Group>(null),
+    elbowR: useRef<THREE.Group>(null),
+    hipL: useRef<THREE.Group>(null),
+    hipR: useRef<THREE.Group>(null),
+    kneeL: useRef<THREE.Group>(null),
+    kneeR: useRef<THREE.Group>(null),
+    ankleL: useRef<THREE.Group>(null),
+    ankleR: useRef<THREE.Group>(null),
+  };
+  const state = useRef<RigState>(createRigState());
+  const rig = useRef<Rig | null>(null);
 
   useFrame((_, dt) => {
     const mo = motion?.current;
     uniforms.uDissolve.value = mo?.dissolve ?? 0;
     if (mo?.edge) uniforms.uEdge.value.set(mo.edge);
-    if (dead || !root.current) return;
-    const speed = mo?.speed ?? 0;
-    const moving = speed > 0.3;
-    phase.current += dt * (moving ? 4 + speed * 1.6 : 1.4);
-    const swing = moving ? Math.min(0.9, 0.25 + speed * 0.12) : 0;
-    const s = Math.sin(phase.current);
-    if (legL.current) legL.current.rotation.x = s * swing;
-    if (legR.current) legR.current.rotation.x = -s * swing;
-    if (armL.current) armL.current.rotation.x = -s * swing * 0.8;
-    if (armR.current) armR.current.rotation.x = s * swing * 0.8;
-    root.current.position.y = moving ? Math.abs(Math.cos(phase.current)) * 0.06 : Math.sin(phase.current) * 0.012;
+    if (dead) return;
+    if (!rig.current) {
+      if (!g.root.current) return;
+      rig.current = Object.fromEntries(Object.entries(g).map(([k, r]) => [k, r.current])) as unknown as Rig;
+    }
+    animateRig(rig.current, state.current, { task: mo?.state === 'task', tired: !!mo?.tired, speed: mo?.speed }, dt);
   });
 
   const shadow = castShadow && !ghost && !hidden;
   const ol = outline ? <Outlines thickness={0.045} color={outline} screenspace={false} /> : null;
+  const legs = ([-1, 1] as const).map((side) => (
+    <group key={side} ref={side < 0 ? g.hipL : g.hipR} position={[side * RIG.hipX, 0, 0]}>
+      <mesh material={m.bottom} geometry={THIGH_GEO} castShadow={shadow}>{ol}</mesh>
+      <group ref={side < 0 ? g.kneeL : g.kneeR} position={[0, -RIG.thigh, 0]}>
+        <mesh material={m.bottom} geometry={SHIN_GEO} castShadow={shadow}>{ol}</mesh>
+        <group ref={side < 0 ? g.ankleL : g.ankleR} position={[0, -RIG.shin, 0]}>
+          <mesh material={m.shoes} geometry={SHOE_GEO} position={[0, -0.035, 0.045]} castShadow={shadow} />
+        </group>
+      </group>
+    </group>
+  ));
+  const arms = ([-1, 1] as const).map((side) => (
+    <group key={side} ref={side < 0 ? g.shoulderL : g.shoulderR} position={[side * RIG.shoulderX, RIG.shoulderY, 0]}>
+      <mesh material={m.top} geometry={UPPER_ARM_GEO} castShadow={shadow}>{ol}</mesh>
+      <group ref={side < 0 ? g.elbowL : g.elbowR} position={[0, -RIG.upperArm, 0]}>
+        <mesh material={m.top} geometry={FOREARM_GEO} castShadow={shadow}>{ol}</mesh>
+        <mesh material={m.skin} geometry={HAND_GEO} position={[0, -0.29, 0.01]} castShadow={shadow} />
+      </group>
+    </group>
+  ));
   return (
-    <group ref={root}>
-      {/* pernas */}
-      <group ref={legL} position={[-0.13, 0.82, 0]}>
-        <mesh material={m.bottom} position={[0, -0.38, 0]} castShadow={shadow} geometry={LEG_GEO}>{ol}</mesh>
-        <mesh material={m.shoes} position={[0, -0.76, 0.05]} castShadow={shadow} geometry={SHOE_GEO} />
+    <group ref={g.root}>
+      <group ref={g.pelvis} position={[0, RIG.hipY, 0]}>
+        {/* quadril */}
+        <mesh material={m.bottom} geometry={HIPS_GEO} position={[0, 0.02, 0]} castShadow={shadow} />
+        {legs}
+        <group ref={g.spine}>
+          {/* tronco com ombros */}
+          <mesh material={m.top} geometry={TORSO_GEO} position={[0, 0.27, 0]} castShadow={shadow}>{ol}</mesh>
+          <mesh material={m.top} geometry={SHOULDERS_GEO} position={[0, RIG.shoulderY - 0.02, 0]} rotation={[0, 0, Math.PI / 2]} castShadow={shadow} />
+          {arms}
+          <group ref={g.head} position={[0, RIG.neckY, 0]}>
+            <mesh material={m.skin} geometry={NECK_GEO} position={[0, 0.03, 0]} />
+            <mesh material={m.skin} geometry={HEAD_GEO} position={[0, 0.17, 0.01]} castShadow={shadow}>{ol}</mesh>
+            <mesh material={m.hair} geometry={HAIR_GEO} position={[0, 0.2, -0.012]} scale={[1.07, 1.02, 1.1]} />
+            {/* olhos: mostram para onde a pessoa está olhando */}
+            <mesh material={EYE_MAT} geometry={EYE_GEO} position={[-0.058, 0.18, 0.152]} />
+            <mesh material={EYE_MAT} geometry={EYE_GEO} position={[0.058, 0.18, 0.152]} />
+          </group>
+        </group>
       </group>
-      <group ref={legR} position={[0.13, 0.82, 0]}>
-        <mesh material={m.bottom} position={[0, -0.38, 0]} castShadow={shadow} geometry={LEG_GEO}>{ol}</mesh>
-        <mesh material={m.shoes} position={[0, -0.76, 0.05]} castShadow={shadow} geometry={SHOE_GEO} />
-      </group>
-      {/* tronco (a "cápsula") */}
-      <mesh material={m.top} position={[0, 1.2, 0]} castShadow={shadow} geometry={TORSO_GEO}>{ol}</mesh>
-      {/* braços */}
-      <mesh ref={armL} material={m.top} position={[-0.36, 1.22, 0]} castShadow={shadow} geometry={ARM_GEO}>{ol}</mesh>
-      <mesh ref={armR} material={m.top} position={[0.36, 1.22, 0]} castShadow={shadow} geometry={ARM_GEO}>{ol}</mesh>
-      {/* cabeça */}
-      <mesh material={m.skin} position={[0, 1.66, 0]} castShadow={shadow} geometry={HEAD_GEO}>{ol}</mesh>
-      <mesh material={m.hair} position={[0, 1.73, -0.02]} scale={[1.05, 0.75, 1.08]} geometry={HAIR_GEO} />
     </group>
   );
 }
 
 // geometrias compartilhadas por todos os personagens (criadas uma vez)
-const ARM_GEO = (() => {
-  const g = new THREE.CapsuleGeometry(0.08, 0.46, 4, 8);
-  g.translate(0, -0.22, 0);
-  return g;
+function capsule(r: number, len: number, drop: number) {
+  const geo = new THREE.CapsuleGeometry(r, len, 4, 10);
+  geo.translate(0, -drop, 0);
+  return geo;
+}
+const THIGH_GEO = capsule(0.105, 0.28, 0.22);
+const SHIN_GEO = capsule(0.088, 0.3, 0.21);
+const SHOE_GEO = (() => {
+  const geo = new THREE.BoxGeometry(0.15, 0.09, 0.27, 1, 1, 2);
+  // bico arredondado
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    if (pos.getZ(i) > 0.1) {
+      pos.setX(i, pos.getX(i) * 0.8);
+      pos.setY(i, pos.getY(i) - (pos.getY(i) > 0 ? 0.025 : 0));
+    }
+  }
+  geo.computeVertexNormals();
+  return geo;
 })();
-const LEG_GEO = new THREE.CapsuleGeometry(0.11, 0.56, 4, 8);
-const SHOE_GEO = new THREE.BoxGeometry(0.16, 0.1, 0.28);
-const TORSO_GEO = new THREE.CapsuleGeometry(0.26, 0.42, 6, 12);
-const HEAD_GEO = new THREE.SphereGeometry(0.17, 16, 12);
-const HAIR_GEO = new THREE.SphereGeometry(0.17, 14, 10, 0, Math.PI * 2, 0, Math.PI / 1.9);
+const HIPS_GEO = new THREE.CapsuleGeometry(0.17, 0.12, 4, 10).rotateZ(Math.PI / 2).scale(1, 1, 0.75);
+const TORSO_GEO = new THREE.CapsuleGeometry(0.235, 0.3, 6, 14).scale(1, 1, 0.78);
+const SHOULDERS_GEO = new THREE.CapsuleGeometry(0.11, 0.42, 4, 10).scale(1, 1, 0.85);
+const UPPER_ARM_GEO = capsule(0.075, 0.18, 0.14);
+const FOREARM_GEO = capsule(0.066, 0.17, 0.13);
+const HAND_GEO = new THREE.SphereGeometry(0.068, 10, 8).scale(0.85, 1.1, 0.75);
+const NECK_GEO = new THREE.CylinderGeometry(0.065, 0.075, 0.12, 8);
+const HEAD_GEO = new THREE.SphereGeometry(0.165, 18, 14).scale(0.95, 1.08, 1);
+const HAIR_GEO = new THREE.SphereGeometry(0.17, 16, 10, 0, Math.PI * 2, 0, Math.PI / 1.9);
+const EYE_GEO = new THREE.SphereGeometry(0.022, 8, 6);
+const EYE_MAT = new THREE.MeshStandardMaterial({ color: '#141010', roughness: 0.3 });
 
 // ------------------------------------------------------------------ modelo final
 

@@ -14,11 +14,16 @@ applyThemeCss();
 // depuração no console do navegador (só em desenvolvimento)
 if (import.meta.env.DEV) Object.assign(window, { __nevoeiro: { net, store: useStore, voice, pushFx, currentRoom, stations: TASK_STATIONS } });
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+const preview = import.meta.env.DEV && new URLSearchParams(location.search).has('anim');
+if (preview) {
+  void import('./dev/AnimPreview').then(({ AnimPreview }) => createRoot(document.getElementById('root')!).render(<AnimPreview />));
+} else {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
 
 // PWA: service worker só em produção e em http(s) (no Electron/Capacitor não é necessário)
 if ('serviceWorker' in navigator && import.meta.env.PROD && location.protocol.startsWith('http')) {
