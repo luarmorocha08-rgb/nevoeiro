@@ -141,7 +141,7 @@ export interface QualityProfile {
 
 export const QUALITY_PROFILES: Record<QualityLevel, QualityProfile> = {
   low: { dpr: [0.6, 0.9], shadows: false, softShadows: false, shadowMapSize: 512, antialias: false, post: 0, fogVeils: 6, grass: 0, lite: true, dust: 0, fireflies: 10, leaves: 0, smoke: false, pointLights: 3, treeDetail: 5, particles: 160, stars: false },
-  medium: { dpr: [0.9, 1.25], shadows: true, softShadows: false, shadowMapSize: 1024, antialias: false, post: 1, fogVeils: 16, grass: 2600, lite: false, dust: 60, fireflies: 30, leaves: 40, smoke: true, pointLights: 5, treeDetail: 6, particles: 350, stars: true },
+  medium: { dpr: [0.9, 1.25], shadows: true, softShadows: false, shadowMapSize: 1024, antialias: false, post: 1, fogVeils: 16, grass: 1600, lite: false, dust: 60, fireflies: 30, leaves: 40, smoke: true, pointLights: 5, treeDetail: 6, particles: 350, stars: true },
   high: { dpr: [1, 2], shadows: true, softShadows: true, shadowMapSize: 2048, antialias: false, post: 2, fogVeils: 28, grass: 6500, lite: false, dust: 140, fireflies: 60, leaves: 90, smoke: true, pointLights: 8, treeDetail: 8, particles: 700, stars: true },
 };
 

@@ -1,0 +1,32 @@
+{"t":0,"iso":"2026-10-23T13:12:13.029Z","type":"match_start","players":[{"netId":"damqx1","name":"Online","role":"xerife","bot":false},{"netId":"udh1v2","name":"Bento 🤖","role":"civil","bot":true},{"netId":"pavoa3","name":"Clara 🤖","role":"rastreador","bot":true},{"netId":"ra0wd4","name":"Davi 🤖","role":"metamorfo","bot":true},{"netId":"anslu5","name":"Elisa 🤖","role":"anjo","bot":true},{"netId":"miag96","name":"Fábio 🤖","role":"zumbi","bot":true},{"netId":"49lpb7","name":"Gema 🤖","role":"detetive","bot":true},{"netId":"q4nys8","name":"Heitor 🤖","role":"civil","bot":true},{"netId":"rd5kw9","name":"Iara 🤖","role":"civil","bot":true},{"netId":"na0apa","name":"Joaquim 🤖","role":"civil","bot":true}],"killers":2,"innocents":8,"killsNeeded":4}
+{"t":8040,"iso":"2026-10-23T13:12:21.069Z","type":"playing"}
+{"t":13118,"iso":"2026-10-23T13:12:26.147Z","type":"chat","actor":{"netId":"q4nys8","name":"Heitor 🤖","role":"civil","bot":true},"channel":"local","text":"Tem alguém me seguindo?"}
+{"t":26374,"iso":"2026-10-23T13:12:39.403Z","type":"thermal","actor":{"netId":"pavoa3","name":"Clara 🤖","role":"rastreador","bot":true}}
+{"t":29736,"iso":"2026-10-23T13:12:42.765Z","type":"task_done","actor":{"netId":"49lpb7","name":"Gema 🤖","role":"detetive","bot":true},"task":"barris","done":1,"needed":32}
+{"t":32145,"iso":"2026-10-23T13:12:45.174Z","type":"chat","actor":{"netId":"q4nys8","name":"Heitor 🤖","role":"civil","bot":true},"channel":"local","text":"Vou ficar perto da fonte."}
+{"t":32452,"iso":"2026-10-23T13:12:45.481Z","type":"task_done","actor":{"netId":"anslu5","name":"Elisa 🤖","role":"anjo","bot":true},"task":"lampiao-jardim","done":2,"needed":32}
+{"t":34356,"iso":"2026-10-23T13:12:47.385Z","type":"task_done","actor":{"netId":"udh1v2","name":"Bento 🤖","role":"civil","bot":true},"task":"poco","done":3,"needed":32}
+{"t":35211,"iso":"2026-10-23T13:12:48.240Z","type":"chat","actor":{"netId":"q4nys8","name":"Heitor 🤖","role":"civil","bot":true},"channel":"local","text":"Vi alguém perto da igreja..."}
+{"t":35863,"iso":"2026-10-23T13:12:48.892Z","type":"task_done","actor":{"netId":"pavoa3","name":"Clara 🤖","role":"rastreador","bot":true},"task":"arquivos","done":4,"needed":32}
+{"t":36365,"iso":"2026-10-23T13:12:49.394Z","type":"chat","actor":{"netId":"miag96","name":"Fábio 🤖","role":"zumbi","bot":true},"channel":"local","text":"O cemitério me dá arrepios."}
+{"t":41380,"iso":"2026-10-23T13:12:54.409Z","type":"task_done","actor":{"netId":"na0apa","name":"Joaquim 🤖","role":"civil","bot":true},"task":"arquivos","done":5,"needed":32}
+{"t":42936,"iso":"2026-10-23T13:12:55.965Z","type":"task_done","actor":{"netId":"q4nys8","name":"Heitor 🤖","role":"civil","bot":true},"task":"ervas","done":6,"needed":32}
+{"t":47616,"iso":"2026-10-23T13:13:00.645Z","type":"task_done","actor":{"netId":"rd5kw9","name":"Iara 🤖","role":"civil","bot":true},"task":"cerca","done":7,"needed":32}
+{"t":47916,"iso":"2026-10-23T13:13:00.945Z","type":"chat","actor":{"netId":"anslu5","name":"Elisa 🤖","role":"anjo","bot":true},"channel":"local","text":"Eu estava na taverna o tempo todo."}
+{"t":50022,"iso":"2026-10-23T13:13:03.051Z","type":"chat","actor":{"netId":"udh1v2","name":"Bento 🤖","role":"civil","bot":true},"channel":"local","text":"Alguém ouviu isso?"}
+{"t":52082,"iso":"2026-10-23T13:13:05.111Z","type":"chat","actor":{"netId":"49lpb7","name":"Gema 🤖","role":"detetive","bot":true},"channel":"local","text":"Essa neblina não ajuda."}
+{"t":53288,"iso":"2026-10-23T13:13:06.317Z","type":"task_done","actor":{"netId":"udh1v2","name":"Bento 🤖","role":"civil","bot":true},"task":"feno","done":8,"needed":32}
+{"t":57405,"iso":"2026-10-23T13:13:10.434Z","type":"task_done","actor":{"netId":"anslu5","name":"Elisa 🤖","role":"anjo","bot":true},"task":"arquivos","done":9,"needed":32}
+{"t":59215,"iso":"2026-10-23T13:13:12.244Z","type":"chat","actor":{"netId":"na0apa","name":"Joaquim 🤖","role":"civil","bot":true},"channel":"local","text":"Vou ficar perto da fonte."}
+{"t":73993,"iso":"2026-10-23T13:13:27.022Z","type":"task_done","actor":{"netId":"pavoa3","name":"Clara 🤖","role":"rastreador","bot":true},"task":"tumulo","done":10,"needed":32}
+{"t":76756,"iso":"2026-10-23T13:13:29.785Z","type":"task_done","actor":{"netId":"49lpb7","name":"Gema 🤖","role":"detetive","bot":true},"task":"sino","done":11,"needed":32}
+{"t":77560,"iso":"2026-10-23T13:13:30.589Z","type":"task_done","actor":{"netId":"na0apa","name":"Joaquim 🤖","role":"civil","bot":true},"task":"tumulo","done":12,"needed":32}
+{"t":80467,"iso":"2026-10-23T13:13:33.496Z","type":"task_done","actor":{"netId":"q4nys8","name":"Heitor 🤖","role":"civil","bot":true},"task":"lareira","done":13,"needed":32}
+{"t":81319,"iso":"2026-10-23T13:13:34.348Z","type":"chat","actor":{"netId":"na0apa","name":"Joaquim 🤖","role":"civil","bot":true},"channel":"local","text":"Cadê o xerife quando a gente precisa?"}
+{"t":85594,"iso":"2026-10-23T13:13:38.623Z","type":"task_done","actor":{"netId":"udh1v2","name":"Bento 🤖","role":"civil","bot":true},"task":"fonte","done":14,"needed":32}
+{"t":87048,"iso":"2026-10-23T13:13:40.077Z","type":"chat","actor":{"netId":"49lpb7","name":"Gema 🤖","role":"detetive","bot":true},"channel":"local","text":"Eu estava na taverna o tempo todo."}
+{"t":90712,"iso":"2026-10-23T13:13:43.741Z","type":"death","target":{"netId":"damqx1","name":"Online","role":"xerife","bot":false},"actor":{"netId":"ra0wd4","name":"Davi 🤖","role":"metamorfo","bot":true},"cause":"kill","label":"metamorfo","location":"Praça central","x":11.55,"z":-4.78,"permanent":true}
+{"t":90712,"iso":"2026-10-23T13:13:43.741Z","type":"chat","actor":{"netId":"udh1v2","name":"Bento 🤖","role":"civil","bot":true},"channel":"local","text":"Vi Davi 🤖 matar alguém!"}
+{"t":92967,"iso":"2026-10-23T13:13:45.996Z","type":"task_done","actor":{"netId":"rd5kw9","name":"Iara 🤖","role":"civil","bot":true},"task":"feno","done":15,"needed":32}
+{"t":94887,"iso":"2026-10-23T13:13:47.916Z","type":"task_done","actor":{"netId":"anslu5","name":"Elisa 🤖","role":"anjo","bot":true},"task":"tumulo","done":16,"needed":32}
+{"t":95747,"iso":"2026-10-23T13:13:48.776Z","type":"bot_takeover","actor":{"netId":"damqx1","name":"Online","role":"xerife","bot":true}}

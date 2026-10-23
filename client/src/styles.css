@@ -489,7 +489,7 @@ input[type='checkbox'] { accent-color: var(--warm); width: 20px; height: 20px; }
 .task-prompt em { color: var(--death-text); font-style: normal; }
 .task-prompt .icon { color: var(--gold); flex: none; }
 .task-prompt kbd, .task-game kbd { font-family: var(--sans); font-size: 11px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line-strong); background: rgba(var(--fog-rgb), 0.12); color: var(--text); }
-.task-prompt.touch { left: auto; right: calc(16px + var(--safe-right)); transform: none; bottom: calc(232px + var(--safe-bottom)); min-height: 56px; font-size: 14px; max-width: 60vw; }
+.task-prompt.touch { bottom: calc(30px + var(--safe-bottom)); min-height: 56px; font-size: 14px; max-width: min(60vw, 420px); }
 @keyframes promptIn { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
 
 .task-game-wrap { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 50%, rgba(var(--night-rgb), 0.25), rgba(var(--night-rgb), 0.6)); pointer-events: auto; }

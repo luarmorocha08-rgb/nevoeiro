@@ -175,11 +175,15 @@ trilha e ambiente), inverter eixo, **modo para daltônicos**, vibração, **most
 | Sombras (só a lua) | — | PCF 1024 | suaves 2048 |
 | Pós‑processamento | só o filtro térmico quando ativo | bloom, vinheta, grão de filme, ACES | + SSAO (N8AO) e SMAA |
 | Véus de névoa | 6 | 16 | 28 |
-| Tufos de grama com vento | — | 2.600 | 6.500 |
+| Tufos de grama com vento | — | 1.600 | 6.500 |
 | Vagalumes / poeira / folhas | 10 / — / — | 30 / 60 / 40 | 60 / 140 / 90 |
 | Fumaça das chaminés / estrelas | — | sim | sim |
 | Luzes quentes pontuais | 3 | 5 | 8 |
 
+- **Desempenho desta rodada:** o personagem é **uma malha só com ossos** (1 chamada de desenho em vez
+  de 18), janelas e halos são mesclados por casa e a qualidade baixa usa um **modo leve** (uma amostra
+  de ruído na névoa e no chão, céu sem nuvens, sem cones de luz). Com isso a cena nova faz menos
+  chamadas de desenho por quadro que a anterior (146 × 178).
 - **Automática de verdade:** começa pela heurística do aparelho, **mede o FPS nos primeiros 10 s** de
   partida (após 2 s de aquecimento) e sobe/desce um nível (limiares em `CONFIG.graphics.autoQuality`).
   O resultado fica salvo para as próximas partidas.
