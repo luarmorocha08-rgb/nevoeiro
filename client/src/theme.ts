@@ -42,6 +42,11 @@ export const THEME = {
     background: '#0B0F1A',
     /** cor da névoa e do horizonte (luz da lua espalhada no nevoeiro) */
     fogFar: '#3B4760',
+    /** luz ambiente (azul-noite claro) e reflexo do chão na luz hemisférica */
+    ambient: '#7487b3',
+    groundBounce: '#3a3a30',
+    /** contorno de luz (rim) nos personagens: destaca do fundo */
+    rim: '#9fb6e8',
     /** topo do céu */
     skyZenith: '#070A12',
     ground: '#1B2620',

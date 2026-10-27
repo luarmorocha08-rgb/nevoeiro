@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useTouchGuard } from './touch';
 import { input } from '../input/InputManager';
 import { useStore } from '../net/store';
 import { Icon } from './Icons';
@@ -13,6 +14,11 @@ export function TouchControls() {
   const [running, setRunning] = useState(false);
   const set = useStore((s) => s.set);
   const R = 60;
+  // joystick, olhar, correr e mapa: nenhum toque longo vira menu/seleção
+  const layer = useRef<HTMLDivElement>(null);
+  const buttons = useRef<HTMLDivElement>(null);
+  useTouchGuard(layer);
+  useTouchGuard(buttons);
 
   const onDown = (e: React.PointerEvent) => {
     const left = e.clientX < window.innerWidth * 0.45;
@@ -52,7 +58,7 @@ export function TouchControls() {
 
   return (
     <>
-      <div className="touch-layer" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+      <div ref={layer} className="touch-layer" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onUp}>
         {stick && (
           <div className="stick-base" style={{ left: stick.ox - R, top: stick.oy - R, width: R * 2, height: R * 2 }}>
             <div className="stick-knob" style={{ transform: `translate(${stick.x}px, ${stick.y}px)` }} />
@@ -60,7 +66,7 @@ export function TouchControls() {
         )}
         {!stick && <div className="stick-hint">Arraste para andar</div>}
       </div>
-      <div className="touch-buttons">
+      <div ref={buttons} className="touch-buttons">
         <button
           className={`round-btn${running ? ' on' : ''}`}
           onPointerDown={(e) => {

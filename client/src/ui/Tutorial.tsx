@@ -1,24 +1,70 @@
-import { useEffect, useState } from 'react';
+/**
+ * Tutorial da primeira partida — compacto, num canto, sem cobrir o personagem nem os botões.
+ * Cada dica avança sozinha quando você faz o que ela ensina (andar, abrir o mapa, fazer uma
+ * tarefa…) ou depois de alguns segundos. Só aparece na primeira partida (localStorage);
+ * dá para rever em Configurações → "Rever tutorial".
+ */
+import { useEffect, useRef, useState } from 'react';
 import { ROLE_INFO } from '@nevoeiro/shared';
-import { useStore } from '../net/store';
+import { net } from '../net/netState';
+import { getState, useStore } from '../net/store';
 import { roleColor } from '../theme';
 import { Icon } from './Icons';
 
-const KEY = 'nevoeiro.tutorial.v2';
+const KEY = 'nevoeiro.tutorial.v3';
 
-function seen(): boolean {
+export function tutorialSeen(): boolean {
   try {
     return localStorage.getItem(KEY) === '1';
   } catch {
-    return true;
+    return true; // sem armazenamento: não insiste
   }
 }
 
-/** Cartões curtos na primeira partida: controles, sua habilidade, objetivo e esconderijos. */
+function markSeen() {
+  try {
+    localStorage.setItem(KEY, '1');
+  } catch {
+    /* modo privado: tudo bem */
+  }
+}
+
+/** Configurações → "Rever tutorial". */
+export function replayTutorial() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* ok */
+  }
+  getState().set({ tutorialRun: getState().tutorialRun + 1 });
+}
+
+interface Step {
+  icon: string;
+  title: string;
+  text: string;
+  /** segundos até avançar sozinho */
+  secs: number;
+  /** a ação ensinada aconteceu? */
+  done?: () => boolean;
+}
+
 export function Tutorial({ touch }: { touch: boolean }) {
   const role = useStore((s) => s.role);
+  const run = useStore((s) => s.tutorialRun);
+  const [open, setOpen] = useState(() => !tutorialSeen());
   const [step, setStep] = useState(0);
-  const [open, setOpen] = useState(() => !seen());
+  const startedAt = useRef(performance.now());
+  // some enquanto há uma janela aberta (tarefa, mapa, caderno, carta do papel)
+  const busy = useStore((s) => !!s.taskOpen || s.mapOpen || s.notebookOpen || s.showRole || s.settingsOpen);
+
+  // "Rever tutorial" nas Configurações
+  useEffect(() => {
+    if (run > 0) {
+      setStep(0);
+      setOpen(true);
+    }
+  }, [run]);
 
   useEffect(() => {
     if (!open) return;
@@ -26,69 +72,83 @@ export function Tutorial({ touch }: { touch: boolean }) {
     return () => useStore.getState().set({ tutorialOpen: false });
   }, [open]);
 
-  if (!open || !role) return null;
-  const info = ROLE_INFO[role.role];
-  const color = roleColor(role.role);
-  const cards = [
-    {
-      icon: 'run',
-      title: 'Movimento',
-      text: touch
-        ? 'Arraste no lado esquerdo para andar (o joystick aparece onde você tocar). Arraste no lado direito para girar a câmera. O botão de corrida gasta stamina.'
-        : 'WASD anda, Shift corre (gasta stamina), mouse gira a câmera — clique na tela para travar o cursor. M abre o mapa, Tab mostra seu papel.',
-    },
-    {
-      icon: role.role,
-      title: `Seu papel: ${info.name}`,
-      text: info.abilities.length
-        ? `${info.description} Use ${touch ? 'os botões redondos' : 'Q e E'}; o alvo mais próximo à sua frente ganha um contorno.`
-        : `${info.description}`,
-    },
-    {
-      icon: 'tasks',
-      title: info.team === 'assassinos' ? 'Tarefas falsas' : 'Tarefas da vila',
-      text:
-        info.team === 'assassinos'
-          ? `Você recebeu tarefas FALSAS: vá até os losangos e finja (${touch ? 'botão' : 'F'}) para se misturar. Cuidado: lampião que você "acende" continua apagado, e o sino não toca.`
-          : `Siga os losangos dourados e aperte ${touch ? 'o botão' : 'F'} para fazer a tarefa. Barra da vila cheia = vitória dos inocentes. Acender lampião e tocar o sino todos veem: é uma prova de inocência.`,
-    },
-    {
-      icon: 'chat',
-      title: 'Converse e desconfie',
-      text: `Não há votação: a voz e o texto só alcançam quem está perto (${touch ? 'botão de chat' : 'Enter'} para escrever). Cada morte gera um alerta e um marcador no mapa por 10s.`,
-    },
-    {
-      icon: 'hide',
-      title: 'Esconda-se',
-      text: 'Armários, montes de feno e arbustos altos escondem você de todos — menos do Rastreador com os óculos de calor.',
-    },
-  ];
-  const card = cards[step];
+  const info = role ? ROLE_INFO[role.role] : null;
+  const killer = info?.team === 'assassinos';
+  const steps: Step[] = info
+    ? [
+        {
+          icon: 'run',
+          title: 'Andar',
+          text: touch ? 'Arraste à esquerda para andar · à direita para olhar.' : 'WASD anda · Shift corre · mouse gira a câmera.',
+          secs: 9,
+          done: () => Math.hypot(net.you?.vx ?? 0, net.you?.vz ?? 0) > 0.8,
+        },
+        {
+          icon: role!.role,
+          title: info.name,
+          text: info.abilities.length ? `${info.abilities.map((a) => a.label).join(' e ')}: ${touch ? 'botões à direita' : 'Q e E'}.` : 'Sem habilidade: observe e se esconda.',
+          secs: 8,
+        },
+        {
+          icon: 'tasks',
+          title: killer ? 'Tarefas falsas' : 'Tarefas',
+          text: killer ? `Finja nos losangos (${touch ? 'botão' : 'F'}) para se misturar.` : `Siga os losangos dourados e aperte ${touch ? 'o botão' : 'F'}.`,
+          secs: 9,
+          done: () => !!getState().taskOpen,
+        },
+        {
+          icon: 'map',
+          title: 'Mapa e pistas',
+          text: touch ? 'Toque no minimapa · 📄 abre o caderno de pistas.' : 'M abre o mapa · J o caderno · segure Tab para ver seu papel.',
+          secs: 8,
+          done: () => getState().mapOpen || getState().notebookOpen,
+        },
+        {
+          icon: 'hide',
+          title: 'Esconda-se',
+          text: 'Armários, feno e arbustos escondem você.',
+          secs: 7,
+        },
+      ]
+    : [];
+
+  // avança pela ação ou pelo tempo
+  useEffect(() => {
+    if (!open || !steps.length) return;
+    startedAt.current = performance.now();
+    const h = setInterval(() => {
+      const s = steps[step];
+      if (!s) return;
+      const elapsed = (performance.now() - startedAt.current) / 1000;
+      if ((s.done && elapsed > 0.8 && s.done()) || elapsed > s.secs) next();
+    }, 250);
+    return () => clearInterval(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, step, steps.length]);
+
   const close = () => {
-    try {
-      localStorage.setItem(KEY, '1');
-    } catch {
-      /* ok */
-    }
+    markSeen();
     setOpen(false);
   };
+  function next() {
+    if (step >= steps.length - 1) close();
+    else setStep((v) => v + 1);
+  }
+
+  if (!open || !info || busy) return null;
+  const s = steps[step];
   return (
-    <div className="tutorial panel" role="dialog" aria-label="Tutorial">
-      <h4>
-        <Icon name={card.icon} size={20} color={step === 1 ? color : undefined} /> {card.title}
-      </h4>
-      <p>{card.text}</p>
-      <div className="tut-foot">
-        <div className="dots">
-          {cards.map((_, i) => (
-            <i key={i} className={i === step ? 'on' : ''} />
-          ))}
-        </div>
-        <button className="btn small ghost" onClick={close}>Pular</button>
-        <button className="btn small primary" onClick={() => (step < cards.length - 1 ? setStep(step + 1) : close())}>
-          {step < cards.length - 1 ? 'Próximo' : 'Jogar'}
-        </button>
+    <div className="tutorial glass" role="status" aria-live="polite">
+      <span className="tut-icon" style={{ color: step === 1 ? roleColor(role!.role) : undefined }}>
+        <Icon name={s.icon} size={18} />
+      </span>
+      <div className="tut-body">
+        <strong>{s.title}</strong>
+        <span>{s.text}</span>
+        <span className="tut-bar" key={step} style={{ animationDuration: `${s.secs}s` }} aria-hidden />
       </div>
+      <span className="tut-count">{step + 1}/{steps.length}</span>
+      <button className="tut-close" onClick={close} aria-label="Fechar tutorial">✕</button>
     </div>
   );
 }

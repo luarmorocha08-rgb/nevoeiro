@@ -72,8 +72,8 @@ function makeShared() {
     cemetery: worldMaterial({ map: groundDetailTex(), color: '#2b3227', scale: 0.3, roughness: 1 }),
     road: worldMaterial({ map: groundDetailTex(), color: '#5d4f3f', scale: 0.35, roughness: 1 }),
     stone: worldMaterial({ map: stoneTex(), color: '#77736b', scale: 0.5 }),
-    darkStone: worldMaterial({ map: stoneTex(), color: '#55534e', scale: 0.6 }),
-    wood: worldMaterial({ map: woodTex(), color: '#3b2a1d', scale: 0.5 }),
+    darkStone: worldMaterial({ map: stoneTex(), color: '#77746c', scale: 0.6 }),
+    wood: worldMaterial({ map: woodTex(), color: '#5a4230', scale: 0.5 }),
     floor: worldMaterial({ map: woodTex(), color: '#4a3726', scale: 0.4 }),
     windowLit: new THREE.MeshStandardMaterial({ color: '#ffd7a0', emissive: THEME.warmLight, emissiveIntensity: 2.4, toneMapped: false }),
     windowDark: new THREE.MeshStandardMaterial({ color: '#0f1418', roughness: 0.2, metalness: 0.4 }),
@@ -170,19 +170,19 @@ export function World({ quality, physics = true }: { quality: QualityProfile; ph
       <Trees blocks={byKind.tree ?? []} detail={quality.treeDetail} shadows={quality.shadows} />
       {quality.grass > 0 && <Grass count={quality.grass} />}
       <Graves blocks={byKind.grave ?? []} />
-      <SimpleBoxes blocks={byKind.rock ?? []} color="#3d4140" geometry="dodeca" />
-      <SimpleBoxes blocks={byKind.pew ?? []} color="#5a3c26" tex="wood" />
-      <SimpleBoxes blocks={byKind.table ?? []} color="#6a4a30" tex="wood" />
-      <SimpleBoxes blocks={byKind.counter ?? []} color="#5a3820" tex="wood" />
-      <SimpleBoxes blocks={byKind.desk ?? []} color="#4a4038" tex="wood" />
-      <SimpleBoxes blocks={byKind.hay ?? []} color="#a68a3e" />
-      <SimpleBoxes blocks={byKind.cart ?? []} color="#6a4a2e" tex="wood" />
+      <SimpleBoxes blocks={byKind.rock ?? []} color="#6a6e6c" geometry="dodeca" />
+      <SimpleBoxes blocks={byKind.pew ?? []} color="#8a6444" tex="wood" />
+      <SimpleBoxes blocks={byKind.table ?? []} color="#9a724c" tex="wood" />
+      <SimpleBoxes blocks={byKind.counter ?? []} color="#8a5e3a" tex="wood" />
+      <SimpleBoxes blocks={byKind.desk ?? []} color="#7a6a5a" tex="wood" />
+      <SimpleBoxes blocks={byKind.hay ?? []} color="#c4a554" />
+      <SimpleBoxes blocks={byKind.cart ?? []} color="#9a6e44" tex="wood" />
       <SimpleBoxes blocks={byKind.bed ?? []} color="#6b3a3a" />
       <SimpleBoxes blocks={byKind.sofa ?? []} color="#3b2e45" />
       <SimpleBoxes blocks={byKind.altar ?? []} color="#cfc8b8" tex="stone" />
-      <SimpleBoxes blocks={byKind.bench ?? []} color="#5a4030" tex="wood" />
+      <SimpleBoxes blocks={byKind.bench ?? []} color="#94704e" tex="wood" />
       <SimpleBoxes blocks={byKind.crypt ?? []} color="#7a7a76" tex="stone" />
-      <SimpleBoxes blocks={byKind.wardrobe ?? []} color="#5a4028" tex="wood" />
+      <SimpleBoxes blocks={byKind.wardrobe ?? []} color="#86603c" tex="wood" />
       <HideSpotVisuals />
       <Fences blocks={byKind.fence ?? []} />
       <Bars blocks={byKind.bars ?? []} />

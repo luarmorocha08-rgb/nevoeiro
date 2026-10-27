@@ -3,6 +3,7 @@ import { QUALITY_LABEL, detectQuality, type QualitySetting } from '../quality';
 import { leaveRoom, serverUrl } from '../net/connection';
 import { useStore } from '../net/store';
 import { voice } from '../voice/VoiceManager';
+import { replayTutorial } from './Tutorial';
 
 export function SettingsModal() {
   const open = useStore((s) => s.settingsOpen);
@@ -70,6 +71,18 @@ export function SettingsModal() {
           <input type="checkbox" checked={settings.vibration} onChange={(e) => update({ vibration: e.target.checked })} />
           <span>Vibrar no celular ao agir</span>
         </label>
+        <div className="field row">
+          <button
+            className="btn small ghost"
+            onClick={() => {
+              replayTutorial();
+              set({ settingsOpen: false });
+            }}
+          >
+            Rever tutorial
+          </button>
+          <span className="muted">Mostra as dicas de novo (na próxima partida, se você estiver no menu).</span>
+        </div>
         <label className="field row">
           <input type="checkbox" checked={settings.showFps} onChange={(e) => update({ showFps: e.target.checked })} />
           <span>Mostrar FPS</span>

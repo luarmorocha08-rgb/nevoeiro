@@ -1,9 +1,10 @@
-import type { CSSProperties } from 'react';
+import { useRef, type CSSProperties } from 'react';
 import { ROLE_INFO } from '@nevoeiro/shared';
 import { triggerAbility } from '../game/abilities';
 import { useStore } from '../net/store';
 import { roleColor } from '../theme';
 import { Icon } from './Icons';
+import { useTouchGuard } from './touch';
 
 /** Botões de habilidade: anel radial de recarga, contagem, pulso quando volta (mouse, toque, Q/E). */
 export function AbilityBar({ touch }: { touch: boolean }) {
@@ -12,13 +13,16 @@ export function AbilityBar({ touch }: { touch: boolean }) {
   const target = useStore((s) => s.target);
   const bodyTarget = useStore((s) => s.bodyTarget);
   const flash = useStore((s) => s.readyFlash);
+  // toque longo em MATAR/ALGEMAR/EXAMINAR não abre menu, lupa nem seleção
+  const bar = useRef<HTMLDivElement>(null);
+  useTouchGuard(bar, !!role && !!you?.alive);
   if (!role || !you?.alive) return null;
   const info = ROLE_INFO[role.role];
   const keys = ['Q', 'E'];
   const color = roleColor(role.role);
 
   return (
-    <div className={`ability-bar${touch ? ' touch' : ''}`}>
+    <div ref={bar} className={`ability-bar${touch ? ' touch' : ''}`}>
       {info.abilities.map((a, i) => {
         const st = you.abilities.find((x) => x.action === a.action);
         const cdMs = st?.cd ?? 0;

@@ -49,7 +49,11 @@ export function GameScreen() {
           st.set({ mapOpen: !st.mapOpen, teleportPicking: false });
           break;
         case 'role':
-          st.set({ showRole: !st.showRole });
+          st.set({ showRole: true });
+          break;
+        case 'roleUp':
+          // na revelação do início da rodada a carta fica até a névoa fechar
+          if (st.phase !== 'reveal') st.set({ showRole: false });
           break;
         case 'mute':
           st.set({ voice: { ...st.voice, micOn: !st.voice.micOn } });

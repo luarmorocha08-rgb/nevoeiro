@@ -4,6 +4,8 @@ import { unlockAudio } from '../audio/sfx';
 import { createRoom, joinRoom, serverUrl } from '../net/connection';
 import { startOffline } from '../net/offline';
 import { useStore } from '../net/store';
+import { isTouchDevice } from '../quality';
+import { useOrientation } from './useOrientation';
 
 export function Home() {
   const settings = useStore((s) => s.settings);
@@ -23,8 +25,12 @@ export function Home() {
     return { name: n, skin };
   };
 
+  const orientation = useOrientation();
   return (
     <div className="home">
+      {isTouchDevice() && orientation === 'portrait' && (
+        <p className="rotate-hint" role="note">⟲ Vire o celular para jogar melhor (opcional)</p>
+      )}
       <div className="home-inner">
         <p className="eyebrow">◇ Uma vila. Uma noite. Ninguém é quem parece.</p>
         <h1 className="logo">

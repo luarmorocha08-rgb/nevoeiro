@@ -16,6 +16,7 @@ import { Tutorial } from './Tutorial';
 import { TaskGame, TaskList, TaskPrompt, VillageProgress } from './Tasks';
 import { Notebook, NotebookButton } from './Notebook';
 import { RoundScreen } from './RoundScreen';
+import { useOrientation } from './useOrientation';
 
 export function Hud() {
   const touch = isTouchDevice();
@@ -26,35 +27,44 @@ export function Hud() {
   const locked = useStore((s) => s.pointerLocked);
   const showFps = useStore((s) => s.settings.showFps);
   const taskOpen = useStore((s) => !!s.taskOpen);
+  // re-renderiza ao virar o celular: o layout muda sem recarregar nem perder estado
+  const orientation = useOrientation();
   const compact = touch || window.innerWidth < 760;
+  const landscape = touch && orientation === 'landscape';
+  const mapSize = touch ? (landscape ? 84 : 96) : compact ? 112 : 168;
 
   return (
-    <div className={`hud${touch ? ' touch' : ''}`}>
+    <div className={`hud${touch ? ` touch ${orientation}` : ''}`}>
       {/* primeiro filho: fica atrás do resto do HUD (não escurece botões nem textos) */}
       <TensionOverlay />
       {touch && !end && <TouchControls />}
-      <TopBar />
+      {/* coluna do canto superior esquerdo: papel, rodada, contadores, tarefas (empilhados, sem sobrepor) */}
+      <div className="hud-left-top">
+        <TopBar />
+        {phase === 'playing' && !end && <TaskList compact={compact} />}
+        {/* no celular o chat fica recolhido nesta coluna */}
+        {touch && !end && <Chat compact />}
+      </div>
       <Alerts />
       <Toasts />
       {!end && (
         <div className="hud-right-top">
-          <Minimap size={compact ? 112 : 168} />
+          <Minimap size={mapSize} />
           <VoiceWidget touch={touch} />
           <div className="hud-btn-row">
             <NotebookButton />
-          <button className="round-btn gear-btn" aria-label="Configurações" title="Configurações" onClick={() => useStore.getState().set({ settingsOpen: true })}>
-            <Icon name="gear" size={20} />
-          </button>
+            <button className="round-btn gear-btn" aria-label="Configurações" title="Configurações" onClick={() => useStore.getState().set({ settingsOpen: true })}>
+              <Icon name="gear" size={20} />
+            </button>
           </div>
         </div>
       )}
-      {phase === 'playing' && !end && <TaskList compact={compact} />}
       {phase === 'playing' && !end && alive && <TaskPrompt touch={touch} />}
       {phase === 'playing' && !end && alive && <TaskGame touch={touch} />}
       <ExaminePanel />
       <SpectatorBanner />
       <StatusEffects />
-      {!end && <Chat compact={compact} />}
+      {!touch && !end && <Chat compact={compact} />}
       {phase === 'playing' && !end && <AbilityBar touch={touch} />}
       {phase === 'playing' && !end && alive && <StaminaBar />}
       <ActionFeedback />

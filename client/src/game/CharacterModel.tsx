@@ -11,6 +11,8 @@ import { useFrame } from '@react-three/fiber';
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
+import { CONFIG } from '@nevoeiro/shared';
+import { THEME } from '../theme';
 import { animateRig, createRigState, poseDead, type RigState } from './rig';
 import { characterGeometry, createBones } from './characterMesh';
 
@@ -75,6 +77,7 @@ const NOISE_GLSL = /* glsl */ `
 varying vec3 vDissolvePos;
 uniform float uDissolve;
 uniform vec3 uEdge;
+uniform vec3 uRim;
 float dHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float dNoise(vec3 x) {
   vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -82,11 +85,14 @@ float dNoise(vec3 x) {
              mix(mix(dHash(i + vec3(0,0,1)), dHash(i + vec3(1,0,1)), f.x), mix(dHash(i + vec3(0,1,1)), dHash(i + vec3(1,1,1)), f.x), f.y), f.z);
 }`;
 
+const RIM = { value: new THREE.Color(THEME.scene.rim).multiplyScalar(CONFIG.graphics.light.rim) };
+
 /** Injeta o dissolve (ruído 3D + borda brilhante) num material padrão do three. */
 function addDissolve(mat: THREE.MeshStandardMaterial, u: DissolveUniforms) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uDissolve = u.uDissolve;
     shader.uniforms.uEdge = u.uEdge;
+    shader.uniforms.uRim = RIM;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vDissolvePos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvDissolvePos = (modelMatrix * vec4(position, 1.0)).xyz;');
@@ -98,10 +104,12 @@ function addDissolve(mat: THREE.MeshStandardMaterial, u: DissolveUniforms) {
       )
       .replace(
         '#include <emissivemap_fragment>',
-        '#include <emissivemap_fragment>\nif (uDissolve > 0.001 && dn < uDissolve + 0.07) totalEmissiveRadiance += uEdge * 2.5;',
+        '#include <emissivemap_fragment>\nif (uDissolve > 0.001 && dn < uDissolve + 0.07) totalEmissiveRadiance += uEdge * 2.5;' +
+          // contorno de luz (rim): a silhueta brilha de leve e o personagem se destaca do fundo
+          '\nfloat rimK = 1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);\ntotalEmissiveRadiance += uRim * pow(rimK, 2.6);',
       );
   };
-  mat.customProgramCacheKey = () => 'nevoeiro-dissolve';
+  mat.customProgramCacheKey = () => 'nevoeiro-dissolve-rim';
 }
 
 // ------------------------------------------------------------------ placeholder

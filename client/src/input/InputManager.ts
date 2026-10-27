@@ -12,6 +12,7 @@ export type InputAction =
   | 'pttUp'
   | 'escape'
   | 'role'
+  | 'roleUp'
   | 'task'
   | 'notebook';
 
@@ -74,7 +75,10 @@ class InputManager {
     this.started = true;
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
-    window.addEventListener('blur', () => this.keys.clear());
+    window.addEventListener('blur', () => {
+      this.keys.clear();
+      this.emit('roleUp'); // perdeu o foco segurando Tab: fecha a carta
+    });
     window.addEventListener('mousemove', this.onMouseMove);
     window.addEventListener('mouseup', () => (this.dragging = false));
   }
@@ -106,6 +110,8 @@ class InputManager {
       if (e.code === 'Escape') (document.activeElement as HTMLElement)?.blur?.();
       return;
     }
+    // Tab segurado repete o keydown: sem isso o navegador troca o foco
+    if (e.code === 'Tab') e.preventDefault();
     if (e.repeat) return;
     this.keys.add(e.code);
     switch (e.code) {
@@ -140,7 +146,7 @@ class InputManager {
         break;
       case 'Tab':
         e.preventDefault();
-        this.emit('role');
+        this.emit('role'); // segurar mostra a carta; soltar fecha (roleUp)
         break;
       case 'Escape':
         this.emit('escape');
@@ -154,6 +160,7 @@ class InputManager {
   private onKeyUp = (e: KeyboardEvent) => {
     this.keys.delete(e.code);
     if (e.code === 'KeyV') this.emit('pttUp');
+    if (e.code === 'Tab') this.emit('roleUp'); // soltar o Tab fecha a carta do papel
   };
 
   private onMouseMove = (e: MouseEvent) => {
@@ -204,7 +211,8 @@ class InputManager {
     if (edge(0)) this.emit('ability0'); // A
     if (edge(1)) this.emit('ability1'); // B
     if (edge(3)) this.emit('map'); // Y
-    if (edge(9)) this.emit('role'); // Start
+    if (edge(9)) this.emit('role'); // Start (segurar mostra o papel)
+    if (release(9)) this.emit('roleUp');
     if (edge(8)) this.emit('chat'); // Select
     if (edge(4)) this.emit('pttDown'); // LB segura = falar
     if (release(4)) this.emit('pttUp');

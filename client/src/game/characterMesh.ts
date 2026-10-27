@@ -145,10 +145,12 @@ export function characterGeometry(skinId: string): THREE.BufferGeometry {
   const hit = geoCache.get(skinId);
   if (hit) return hit;
   const skin: SkinDef = getSkin(skinId);
+  // roupas um pouco mais saturadas e claras: leem bem na noite com névoa
+  const vivid = (hex: string) => new THREE.Color(hex).offsetHSL(0, 0.12, 0.04);
   const C: Colors = {
-    top: new THREE.Color(skin.top),
-    topDark: new THREE.Color(skin.top).multiplyScalar(0.72),
-    bottom: new THREE.Color(skin.bottom),
+    top: vivid(skin.top),
+    topDark: vivid(skin.top).multiplyScalar(0.72),
+    bottom: vivid(skin.bottom),
     skin: new THREE.Color(skin.skinTone),
     skinDark: new THREE.Color(skin.skinTone).multiplyScalar(0.82),
     hair: new THREE.Color(skin.hair),

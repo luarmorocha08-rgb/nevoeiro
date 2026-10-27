@@ -45,7 +45,9 @@ const FRAGMENT = /* glsl */ `
 #ifdef USE_FOG
   {
     vec3 fogRay = vFogWorld - cameraPosition;
-    float fogDist = length(fogRay);
+    float fogRayLen = length(fogRay);
+    // perto da câmera quase não há névoa (personagens a até ~15 m ficam nítidos)
+    float fogDist = max(fogRayLen - ${f(F.clearRadius)}, 0.0);
     float fogT = abs(fogNear);
     vec2 wind = vec2(fogT * ${f(F.windX)}, fogT * ${f(F.windZ)});
     // manchas: no ponto e a meio caminho do olho (parece volume, não textura no chão)
@@ -65,7 +67,7 @@ const FRAGMENT = /* glsl */ `
     float fogFarCut = 1.0 - exp(-pow(fogFar * ${f(F.distanceDensity)} * fogDist, 1.6));
     float fogFactor = clamp(max(fogGround, fogFarCut), 0.0, 1.0);
     // cor: luz da lua espalhada na névoa, mais escura para o alto
-    vec3 fogDir = fogRay / max(fogDist, 0.001);
+    vec3 fogDir = fogRay / max(fogRayLen, 0.001);
     float fogMoon = pow(max(dot(fogDir, vec3(${f(MOON_DIR.x)}, ${f(MOON_DIR.y)}, ${f(MOON_DIR.z)})), 0.0), 5.0);
     vec3 fogTint = fogColor * (1.0 + fogMoon * ${f(F.moonGlow)}) * mix(1.0, 0.7, clamp(vFogWorld.y * 0.05, 0.0, 1.0));
     gl_FragColor.rgb = mix(gl_FragColor.rgb, fogTint, fogFactor);

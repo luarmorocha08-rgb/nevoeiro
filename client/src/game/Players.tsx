@@ -88,7 +88,7 @@ function RemotePlayer({ view }: { view: EntityView }) {
           <meshBasicMaterial color={outline} transparent opacity={0.8} toneMapped={false} />
         </mesh>
       )}
-      <Html position={[0, 2.25, 0]} center distanceFactor={6} zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
+      <Html position={[0, 2.12, 0]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
         <div ref={tagRef} className="nametag">
           <Bubble id={view.id} />
           <SpeakingIcon id={view.id} />
@@ -372,7 +372,7 @@ export function LocalPlayer() {
         <CapsuleCollider args={[0.5, 0.4]} />
       </RigidBody>
       {alive && <CharacterModel skin={skin} motion={motion} ghost={invisible} hidden={hidden} />}
-      <Html position={[0, 2.25, 0]} center distanceFactor={6} zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
+      <Html position={[0, 2.12, 0]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
         <div className="nametag">
           <Bubble id={myId} />
           <SpeakingIcon id={myId} />

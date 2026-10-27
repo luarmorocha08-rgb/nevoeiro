@@ -36,7 +36,7 @@ export function Moon({ quality, follow = true }: { quality: QualityProfile; foll
       ref={light}
       position={[MOON_DIR.x * 40, MOON_DIR.y * 40 + 6, MOON_DIR.z * 40]}
       color={THEME.moonlight}
-      intensity={2.1}
+      intensity={CONFIG.graphics.light.moon}
       castShadow={quality.shadows}
       shadow-mapSize-width={quality.shadowMapSize}
       shadow-mapSize-height={quality.shadowMapSize}
@@ -59,8 +59,9 @@ export function NightLighting({ quality, follow = true }: { quality: QualityProf
       <color attach="background" args={[THEME.scene.background]} />
       {/* THREE.Fog só transporta os uniforms da névoa (near = tempo, far = densidade) — ver fog.ts */}
       <fog attach="fog" args={[THEME.scene.fogFar, 0, CONFIG.graphics.fogDensity]} />
-      <ambientLight color={THEME.night2} intensity={1.6} />
-      <hemisphereLight args={[THEME.moonlight, '#151a14', 0.75]} />
+      {/* noite legível: ambiente e céu azulados (nada fica preto chapado) + lua com sombras */}
+      <ambientLight color={THEME.scene.ambient} intensity={CONFIG.graphics.light.ambient} />
+      <hemisphereLight args={[THEME.moonlight, THEME.scene.groundBounce, CONFIG.graphics.light.hemisphere]} />
       <Moon quality={quality} follow={follow} />
       <SkyDome stars={quality.stars} clouds={!quality.lite} />
     </>
@@ -125,7 +126,8 @@ export function GameCanvas() {
     <Canvas
       className="game-canvas"
       shadows={quality.shadows ? (quality.softShadows ? 'soft' : 'percentage') : false}
-      dpr={quality.dpr}
+      // celular: no máximo 1,5x de resolução (desempenho e bateria)
+      dpr={touch ? [quality.dpr[0], Math.min(quality.dpr[1], 1.5)] : quality.dpr}
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
       camera={{ fov: 62, near: 0.1, far: CONFIG.graphics.cullDistance + 30, position: [0, 3, 8] }}
       onPointerDown={(e) => {
@@ -137,6 +139,10 @@ export function GameCanvas() {
         }
       }}
       onContextMenu={(e) => e.preventDefault()}
+      onCreated={({ scene, gl }) => {
+        // depuração (só em desenvolvimento)
+        if (import.meta.env.DEV) Object.assign(window, { __scene: scene, __gl: gl });
+      }}
     >
       <NightLighting quality={quality} />
       <Suspense fallback={null}>

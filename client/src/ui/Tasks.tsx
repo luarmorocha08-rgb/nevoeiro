@@ -9,6 +9,7 @@ import { cancelTask, finishTask, openTask, taskMinRemaining } from '../game/task
 import { useStore } from '../net/store';
 import { THEME } from '../theme';
 import { Icon } from './Icons';
+import { useTouchGuard } from './touch';
 
 function placeName(st: TaskStation): string {
   if (st.location === 'estrada') return 'Estradas';
@@ -202,26 +203,69 @@ function HoldGame({ st, touch }: { st: TaskStation; touch: boolean }) {
   useEffect(() => {
     if (progress >= 1) win();
   }, [progress, win]);
+
+  // Toque/mouse com listeners nativos: captura o ponteiro (o dedo pode deslizar um pouco
+  // sem soltar), cancela o toque longo do sistema e pausa se o dedo sair de verdade do botão.
+  const btn = useRef<HTMLButtonElement>(null);
+  useTouchGuard(btn);
+  useEffect(() => {
+    const el = btn.current;
+    if (!el) return;
+    const SLACK = 48; // px de folga além da borda do botão
+    let pointer: number | null = null;
+    const setHold = (on: boolean) => {
+      if (holding.current === on) return;
+      holding.current = on;
+      setHeld(on);
+    };
+    const inside = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      return e.clientX > r.left - SLACK && e.clientX < r.right + SLACK && e.clientY > r.top - SLACK && e.clientY < r.bottom + SLACK;
+    };
+    const down = (e: PointerEvent) => {
+      if (pointer !== null) return;
+      e.preventDefault();
+      pointer = e.pointerId;
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* sem captura: ainda funciona pelos eventos do botão */
+      }
+      setHold(true);
+    };
+    const move = (e: PointerEvent) => {
+      if (e.pointerId !== pointer) return;
+      setHold(inside(e)); // saiu de verdade: pausa; voltou: continua
+    };
+    const end = (e: PointerEvent) => {
+      if (e.pointerId !== pointer) return;
+      pointer = null;
+      setHold(false);
+    };
+    const leave = (e: PointerEvent) => {
+      // com captura o "leave" só chega ao soltar; sem captura (mouse), sair pausa
+      if (e.pointerId === pointer && !el.hasPointerCapture?.(e.pointerId)) setHold(false);
+    };
+    el.addEventListener('pointerdown', down, { passive: false });
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('lostpointercapture', end);
+    el.addEventListener('pointerleave', leave);
+    return () => {
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', end);
+      el.removeEventListener('pointercancel', end);
+      el.removeEventListener('lostpointercapture', end);
+      el.removeEventListener('pointerleave', leave);
+      holding.current = false;
+    };
+  }, []);
+
   return (
     <div className="task-hold">
-      <button
-        className={`hold-btn${held ? ' held' : ''}${won ? ' won' : ''}`}
-        onPointerDown={(e) => {
-          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-          holding.current = true;
-          setHeld(true);
-        }}
-        onPointerUp={() => {
-          holding.current = false;
-          setHeld(false);
-        }}
-        onPointerCancel={() => {
-          holding.current = false;
-          setHeld(false);
-        }}
-        onContextMenu={(e) => e.preventDefault()}
-        aria-label="Segurar"
-      >
+      <button ref={btn} className={`hold-btn${held ? ' held' : ''}${won ? ' won' : ''}`} aria-label="Segurar">
         <span className="hold-ring" style={{ ['--p' as string]: `${progress * 360}deg` }} aria-hidden />
         <span className="hold-icon"><Icon name={st.icon} size={34} color={progress > 0.98 ? THEME.warmLight : undefined} /></span>
       </button>
@@ -292,8 +336,10 @@ function TimingGame({ touch }: { touch: boolean }) {
     return () => window.removeEventListener('keydown', down);
   });
 
+  const guard = useRef<HTMLDivElement>(null);
+  useTouchGuard(guard);
   return (
-    <div className="task-timing">
+    <div className="task-timing" ref={guard}>
       <div className={`timing-bar${flash ? ` ${flash}` : ''}`} onPointerDown={press}>
         <span className="timing-zone" style={{ left: `${(zone - W / 2) * 100}%`, width: `${W * 100}%` }} />
         <span className="timing-marker" ref={marker} />
@@ -348,8 +394,10 @@ function SequenceGame({ touch }: { touch: boolean }) {
     return () => window.removeEventListener('keydown', down);
   });
 
+  const guard = useRef<HTMLDivElement>(null);
+  useTouchGuard(guard);
   return (
-    <div className={`task-seq${shake ? ' shake' : ''}`}>
+    <div className={`task-seq${shake ? ' shake' : ''}`} ref={guard}>
       <div className="seq-target" aria-label="Sequência">
         {seq.map((k, i) => (
           <span key={i} className={i < step ? 'ok' : i === step ? 'cur' : ''}>{SYMBOLS[k]}</span>

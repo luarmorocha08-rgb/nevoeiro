@@ -92,8 +92,18 @@ export const CONFIG = {
     } as Record<string, number>,
     /** Multiplicador da neblina com os óculos térmicos. */
     thermalFogFactor: 0.3,
+    /** Luzes da noite (legibilidade sem perder o clima). */
+    light: {
+      ambient: 0.55,
+      hemisphere: 0.85,
+      moon: 2.0,
+      /** força do contorno de luz nos personagens */
+      rim: 0.45,
+    },
     /** Forma da névoa (shader em client/src/game/fog.ts). */
     fog: {
+      /** raio (m) quase sem névoa ao redor da câmera: quem está perto fica nítido */
+      clearRadius: 7,
       /** densidade extra rente ao chão (névoa de altura) */
       heightDensity: 1.7,
       /** quão rápido a névoa afina com a altura (maior = mais rente ao chão) */

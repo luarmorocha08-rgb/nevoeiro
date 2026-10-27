@@ -87,6 +87,8 @@ export function detectQuality(): QualityLevel {
     /* sem WebGL debug */
   }
   detected = score >= 4 ? 'high' : score >= 1 ? 'medium' : 'low';
+  // celular começa na Média (a medição de FPS ajusta depois, se precisar)
+  if (isTouchDevice()) detected = 'medium';
   return detected;
 }
 

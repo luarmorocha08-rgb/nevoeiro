@@ -125,7 +125,7 @@ Variáveis de ambiente: copie `server/.env.example` → `server/.env` e `client/
 | Mapa | M | minimapa / 🗺 | Y |
 | Mutar microfone | N | botão 🎙 | — |
 | Apertar para falar | segure V (ative nas Configurações) | segure 🎙 | segure LB |
-| Ver seu papel | Tab | toque no nome do papel | Start |
+| Ver seu papel | **segure** Tab (soltar fecha) | toque no nome do papel (toque fora fecha) | segure Start |
 | Caderno de pistas | J | botão 📄 (topo direito) | direcional ← |
 | Espectador | WASD voa · Espaço/C sobe e desce | joystick | analógicos + direcional |
 
@@ -173,8 +173,18 @@ velocidade (correndo: joelhos sobem, cotovelos dobram, tronco inclina), há incl
 acelerar, postura curvada quando a stamina acaba, respiração e olhar em volta parado e pose de tarefa.
 Para ver as animações isoladas em desenvolvimento: `npm run dev` e abra `/?anim`.
 
-**Tutorial:** na primeira partida aparecem 5 cartões curtos (controles, sua habilidade, tarefas, chat e
-esconderijos). Para ver de novo, apague `nevoeiro.tutorial.v2` do armazenamento do navegador.
+**Tutorial:** na primeira partida aparece um cartão pequeno no canto (não cobre o personagem nem os
+botões) com 5 dicas. Cada dica avança sozinha quando você faz o que ela ensina (andar, abrir o mapa,
+fazer uma tarefa) ou depois de alguns segundos, e some enquanto houver uma janela aberta. Para ver
+de novo: Configurações → **Rever tutorial**.
+
+**Celular:** em pé ou deitado (o manifesto aceita as duas orientações; virar no meio da partida
+reorganiza o HUD sem recarregar). Joystick à esquerda, habilidades + correr + mapa à direita,
+papel/rodada/contadores/tarefas empilhados no canto superior esquerdo, chat recolhido e áreas seguras
+(notch) respeitadas. Toque longo nunca abre "Copiar/Pesquisar/Traduzir", lupa ou menu: o CSS bloqueia
+seleção e callout fora dos campos de texto e os botões de segurar/agir usam pointer events com
+captura e `touchstart` não passivo (`client/src/ui/touch.ts`). Segurando uma tarefa, o dedo pode
+deslizar um pouco; se sair de verdade do botão o progresso pausa.
 
 Em **Configurações**: qualidade gráfica (baixa/média/alta/automática), sensibilidade, volumes (geral,
 trilha e ambiente), inverter eixo, **modo para daltônicos**, vibração, **mostrar FPS** e servidor.
@@ -196,6 +206,11 @@ trilha e ambiente), inverter eixo, **modo para daltônicos**, vibração, **most
   de 18), janelas e halos são mesclados por casa e a qualidade baixa usa um **modo leve** (uma amostra
   de ruído na névoa e no chão, céu sem nuvens, sem cones de luz). Com isso a cena nova faz menos
   chamadas de desenho por quadro que a anterior (146 × 178).
+- **Luz da noite legível:** ambiente e céu azulados (`CONFIG.graphics.light`), lua com sombras,
+  lampiões quentes; a névoa tem um raio limpo perto da câmera (`fog.clearRadius`) — quem está a até
+  ~15 m fica nítido e o resto some aos poucos. Personagens com contorno de luz (rim) e roupas mais
+  saturadas; nomes com tamanho fixo. No celular a qualidade começa em **Média** e a resolução é
+  limitada a 1,5x.
 - **Automática de verdade:** começa pela heurística do aparelho, **mede o FPS nos primeiros 10 s** de
   partida (após 2 s de aquecimento) e sobe/desce um nível (limiares em `CONFIG.graphics.autoQuality`).
   O resultado fica salvo para as próximas partidas.

@@ -119,6 +119,8 @@ interface State {
   autoQuality: 'low' | 'medium' | 'high' | null;
   fps: number;
   tutorialOpen: boolean;
+  /** incrementa para rever o tutorial (Configurações) */
+  tutorialRun: number;
   /** suas tarefas (falsas se assassino) */
   tasks: TasksMsg | null;
   /** estação da sua tarefa pendente ao alcance (botão "Fazer tarefa") */
@@ -194,6 +196,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   autoQuality: loadAutoQuality(),
   fps: 0,
   tutorialOpen: false,
+  tutorialRun: 0,
   tasks: null,
   taskNear: null,
   taskOpen: null,
